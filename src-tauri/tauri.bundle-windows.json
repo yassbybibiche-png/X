@@ -1,6 +1,9 @@
 {
   "bundle": {
     "externalBin": ["binaries/7z"],
-    "resources": { "binaries/7z.dll": "7z.dll" }
+    "resources": {
+      "binaries/7z.dll": "7z.dll",
+      "binaries/7zip-License.txt": "licenses/7zip-License.txt"
+    }
   }
 }

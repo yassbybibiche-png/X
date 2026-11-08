@@ -1,5 +1,6 @@
 {
   "bundle": {
-    "externalBin": ["binaries/7zz"]
+    "externalBin": ["binaries/7zz"],
+    "resources": { "binaries/7zip-License.txt": "licenses/7zip-License.txt" }
   }
 }

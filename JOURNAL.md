@@ -326,3 +326,15 @@ Progression (une ligne par groupe) :
   construits par chaînes + `original_name`. Registre : 90 outils, Utilitaires
   7/7 P1. Bibliothèques de dev GTK/WebKit réinstallées (même contournement
   `libzstd-dev` qu'en phase 1). fmt OK, clippy OK, test 172/172.
+- Groupe THIRD_PARTY : `THIRD_PARTY.md` — licence de chaque binaire, vérifiée
+  dans l'archive officielle épinglée quand elle la contient (7-Zip `License.txt`,
+  Ghostscript `COPYING` = AGPL-3.0, Tesseract `doc/LICENSE`, ffmpeg `-L` +
+  `-buildconf` = GPL-3.0+, ImageMagick `LICENSE`, pandoc `COPYRIGHT.txt`, qpdf,
+  typst, whisper.cpp) ; tessdata, yt-dlp, Real-ESRGAN (zip sans licence) et
+  modèles whisper marqués « amont, à revérifier » (GitHub/raw injoignables).
+  Ghostscript : obligations AGPL détaillées + décision (jamais inclus,
+  téléchargé depuis Artifex). 7-Zip : `License.txt` désormais copié dans
+  l'installeur (exigé par sa licence) via les overlays de bundle. Bibliothèques
+  Rust : 516 paquets, licences permissives (+ MPL-2.0 pour 5 paquets CSS de
+  Tauri). Ghostscript 10.02.1, Tesseract 5.3.4, ImageMagick 6.9.12 réinstallés
+  par apt → test 172/172, aucun test réel ignoré.
