@@ -230,8 +230,12 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | utilitaires-reassembler | — | `.001` (ou toutes les parties) → `<nom.ext>` (série contrôlée ; ajouté en phase 3b) | **P1** |
 | utilitaires-qrcode | — (crate qrcode) | texte/lien + correction + taille → `Images/qrcode.png` (aucun appel réseau) | **P1** |
 
-Total : 18 + 15 + 17 + 19 + 9 + 4 = **82** (80 prévus + `pdf-infos` et `video-infos`
-ajoutés en phase 2b).
+Total : 18 + 15 + 18 + 22 + 10 + 7 = **90** (80 prévus + 10 ajoutés en phases 2b à
+3b : `pdf-infos`, `video-infos`, `images-vignettes`, `video-concatener`,
+`video-vignettes`, `video-extraire-sous-titres`, `archives-ajouter`,
+`utilitaires-doublons`, `-decouper`, `-reassembler`). « P1 » = implémenté et
+testé ; ce que cela recouvre réellement (vrai binaire ou faux binaire, machine
+vierge, par OS) est détaillé au §5.
 
 ---
 
@@ -431,3 +435,65 @@ raison explicite (jamais de faux succès).
 | **1** | PLAN, squelette Tauri 2, registre des 80 outils, sidecar/output/jobs, diagnostic, UI FR, 4 outils fonctionnels testés |
 | **2** | module `download` (manifeste SHA-256, progression, écriture atomique), bouton Télécharger dans le diagnostic, outils pur Rust restants (PDF lopdf, images, archives), outils ffmpeg/pandoc/ghostscript/7-Zip simples, pré-traitement pandoc sandbox, annulation |
 | **3** | whisper, Real-ESRGAN, Tesseract/OCR, yt-dlp + mise à jour, outils complexes restants, CI complète (ci/deps/release/smoke), THIRD_PARTY.md, README grand public, audit externe (machine vierge, chemins Windows, sécurité) et corrections |
+
+---
+
+## 5. Limites — bilan des outils (phase 3b, 2026-11-08)
+
+### 5.1 Outils réellement exécutables (testés avec le vrai programme)
+Compté sur la VM Linux de développement : outil implémenté **et** exercé de bout
+en bout par `cargo test` avec le vrai binaire (ou en pur Rust). Un outil testé
+seulement avec un faux binaire n'est **pas** compté.
+
+| catégorie | exécutables | total | non validés |
+|---|---|---|---|
+| PDF | 18 | 18 | — |
+| Documents | 15 | 15 | — |
+| Images | 17 | 18 | `images-agrandir-ia` (voie IA) |
+| Vidéo / audio | 18 | 22 | `video-sous-titres`, `audio-transcrire`, `video-telecharger`, `audio-telecharger` |
+| Archives | 10 | 10 | — |
+| Utilitaires | 7 | 7 | — |
+| **Total** | **85** | **90** | 5 |
+
+Soit **85 outils exécutables pour un objectif de 80** (90 au registre).
+
+### 5.2 Outils non validés — raison exacte
+| outil | raison |
+|---|---|
+| `video-sous-titres`, `audio-transcrire` | **modèle manquant** : le SHA-256 des modèles whisper (`ggml-small-q5_1.bin`, `ggml-base-q5_1.bin`) n'est pas épinglé, Hugging Face étant injoignable depuis la VM ; le manifeste les marque `unavailable` (aucune empreinte inventée), donc l'app ne peut pas les télécharger. `whisper-cli` 1.9.5 réel tourne et renvoie l'erreur claire « modèle absent » ; la chaîne complète n'est testée qu'avec un faux `whisper-cli`. Pour activer : ajouter `files` (url, sha256, size) aux entrées `models`. macOS : pas de `whisper-cli` officiel (Homebrew). |
+| `video-telecharger`, `audio-telecharger` | **aucun téléchargement réel testé** (réseau de la VM instable, et pas de dépendance réseau dans les tests) : arguments, validation d'URL, non-écrasement testés avec un faux yt-dlp ; la vérification de mise à jour a été testée avec le vrai yt-dlp. |
+| `images-agrandir-ia` | **pas de GPU Vulkan** sur la VM : le vrai `realesrgan-ncnn-vulkan` échoue (« vkCreateInstance failed ») et l'outil bascule sur le repli Lanczos ×4 **signalé** (testé réellement) ; la voie IA n'est testée qu'avec un faux binaire. |
+
+### 5.3 Disponibilité sur machine vierge, par OS
+« Téléchargeable » = l'app propose le bouton Télécharger (URL + SHA-256 épinglés).
+
+| binaire | Windows x64 | macOS (Intel / ARM) | Linux x64 |
+|---|---|---|---|
+| 7-Zip | **inclus** | **inclus** | **inclus** |
+| ffmpeg/ffprobe, pandoc, typst, qpdf, yt-dlp, Real-ESRGAN | téléchargeable | téléchargeable | téléchargeable |
+| ImageMagick | téléchargeable | **Homebrew** (pas de binaire officiel) | téléchargeable (AppImage, sans FUSE) |
+| Ghostscript | téléchargeable (installeur Artifex extrait) | **Homebrew** | **paquet système** (plus de binaire Linux portable officiel) |
+| Tesseract (+ fra/eng) | téléchargeable (UB Mannheim) | **Homebrew** | **paquet système** |
+| whisper-cli | téléchargeable | **Homebrew** | téléchargeable |
+| modèles whisper | **non** (SHA-256 non épinglé) | **non** | **non** |
+
+Conséquences : sous Linux, 6 outils exigent `apt install ghostscript
+tesseract-ocr tesseract-ocr-fra` (`pdf-compresser`, `-ocr`, `-vers-images`,
+`-niveaux-de-gris`, `-reparer`, `images-ocr-texte`) ; sous macOS, ces 6 outils
+plus les 3 outils ImageMagick (`images-detourer`, `-filigrane`,
+`-planche-contact`) et AVIF/HEIC/WebP avec perte exigent Homebrew. L'outil est
+alors grisé avec la raison et la commande à lancer (diagnostic). Les builds
+`deps.yml` de ces binaires (§3.3.2) ne sont **pas faits**.
+
+### 5.4 Autres limites connues
+- Seule la VM Linux a exécuté le code : **Windows et macOS n'ont jamais été
+  testés** (ni l'app, ni les chemins `.exe`, ni l'extraction des installeurs
+  Windows). La CI le fera (`cargo check` à chaque push, build complet sur tag),
+  mais **aucun workflow GitHub Actions n'a encore tourné**.
+- App jamais lancée graphiquement (VM sans GUI) : frontend vérifié par
+  `node --check` uniquement ; aucune capture d'écran réelle.
+- Installeurs non signés (pas de certificat Apple / Authenticode) : Gatekeeper
+  et SmartScreen avertissent (contournements dans le README).
+- Licences tessdata, yt-dlp, Real-ESRGAN et modèles whisper reprises de l'amont,
+  non relues dans l'archive (voir THIRD_PARTY.md).
+- Pas de bouton « Supprimer le modèle » (prévu au §3.5).

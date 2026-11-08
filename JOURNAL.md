@@ -346,3 +346,12 @@ Progression (une ligne par groupe) :
   ImageMagick 7.1.2-35 installé par l'installeur de l'app dans `.scratch` : les
   tests réels ImageMagick tournent maintenant avec l'AppImage (vérifié : sans la
   variable, 2 tests échouent ; avec, ils passent). test 173/173.
+- Groupe Bilan : registre 90 outils, tous `Phase1` (implémentés + testés),
+  mais seuls **85** sont exercés avec le **vrai** programme (ou en pur Rust) :
+  PDF 18/18, Documents 15/15, Images 17/18, Vidéo/audio 18/22, Archives 10/10,
+  Utilitaires 7/7 → **85 exécutables pour un objectif de 80**. Non validés :
+  `video-sous-titres` et `audio-transcrire` (modèle whisper sans SHA-256 épinglé,
+  donc non téléchargeable), `video-telecharger` et `audio-telecharger` (aucun
+  téléchargement réel testé), `images-agrandir-ia` (voie IA : pas de Vulkan ;
+  repli Lanczos testé). Disponibilité par OS sur machine vierge (Ghostscript et
+  Tesseract : paquet système sous Linux, Homebrew sous macOS…) : PLAN.md §5.
