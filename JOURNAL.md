@@ -109,3 +109,11 @@ Progression (une ligne par groupe) :
   `pdf-images-vers-pdf` (A4 ajusté, transparence sur blanc), nouvel outil
   `pdf-infos` (registre : 81 outils). Découpe : sorties validées seulement à la
   fin (annulation/erreur → rien ne reste). fmt OK, clippy OK, test 87/87.
+- Groupe Images : `images-redimensionner` (largeur/hauteur/%/côté max, Lanczos3),
+  `images-compresser` (JPEG, qualité, alerte si pas plus léger),
+  `images-supprimer-exif` (JPEG : EXIF/XMP/IPTC/commentaires retirés **sans
+  réencodage**, ICC conservé ; orientation EXIF appliquée si nécessaire),
+  `images-pivoter`, `images-retourner`, `images-rogner` (bornes vérifiées),
+  `images-niveaux-de-gris`. Orientation EXIF appliquée à la lecture. La
+  conversion en lot était déjà couverte par `images-convertir` (multi-fichiers,
+  test `lot_avec_un_fichier_invalide`). fmt OK, clippy OK, test 96/96.

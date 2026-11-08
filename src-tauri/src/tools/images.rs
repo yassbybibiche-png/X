@@ -76,7 +76,7 @@ impl OutFormat {
     }
 }
 
-fn parse_quality(value: &str) -> Result<u8> {
+pub(crate) fn parse_quality(value: &str) -> Result<u8> {
     let q: f64 = value
         .trim()
         .parse()
@@ -109,7 +109,7 @@ fn convert_one(path: &Path, format: OutFormat, quality: u8) -> Result<PathBuf> {
 }
 
 /// Adapte l'image aux contraintes du format cible.
-fn prepare(img: DynamicImage, format: OutFormat) -> DynamicImage {
+pub(crate) fn prepare(img: DynamicImage, format: OutFormat) -> DynamicImage {
     match format {
         OutFormat::Png | OutFormat::Tiff => img,
         OutFormat::Jpeg => flatten_on_white(&img),
@@ -151,7 +151,7 @@ pub(crate) fn flatten_on_white(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(rgb)
 }
 
-fn encode(img: &DynamicImage, format: OutFormat, quality: u8, file: File) -> Result<()> {
+pub(crate) fn encode(img: &DynamicImage, format: OutFormat, quality: u8, file: File) -> Result<()> {
     let mut writer = BufWriter::new(file);
     match format {
         OutFormat::Jpeg => {

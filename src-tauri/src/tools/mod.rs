@@ -3,6 +3,7 @@
 
 pub mod archives;
 pub mod images;
+pub mod images_edit;
 pub mod pdf;
 pub mod pdf_images;
 pub mod pdf_pages;
@@ -28,6 +29,13 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-infos", pdf_pages::info),
     ("pdf-images-vers-pdf", pdf_images::images_to_pdf),
     ("images-convertir", images::convert),
+    ("images-redimensionner", images_edit::resize),
+    ("images-compresser", images_edit::compress),
+    ("images-supprimer-exif", images_edit::strip_metadata),
+    ("images-pivoter", images_edit::rotate),
+    ("images-retourner", images_edit::flip),
+    ("images-rogner", images_edit::crop),
+    ("images-niveaux-de-gris", images_edit::grayscale),
     ("archives-creer-zip", archives::create_zip),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
 ];
@@ -66,6 +74,7 @@ pub fn per_file(ctx: &ToolContext, f: impl Fn(&Path) -> Result<PathBuf>) -> Resu
             }
         }
     }
+    ctx.reporter.progress(100.0, "Traitement terminé");
     finish(outputs, last_error, inputs.len())
 }
 

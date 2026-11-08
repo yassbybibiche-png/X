@@ -161,15 +161,15 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
 | images-convertir | — (crate image) ; imagemagick pour AVIF/HEIC (P2) | images → png/jpg/webp/bmp/tiff/gif/ico | **P1** |
-| images-redimensionner | — (crate image) | images + taille/% → `-redim` | P2 |
-| images-compresser | — (crate image) / imagemagick | images + qualité → `-compresse` | P2 |
-| images-supprimer-exif | — (réencodage crate image) | images → `-sans-exif` | P2 |
+| images-redimensionner | — (crate image) | images + taille/% → `-redim` | **P1** |
+| images-compresser | — (crate image) | images + qualité → `-compresse.jpg` | **P1** |
+| images-supprimer-exif | — (JPEG : segments retirés sans réencodage ; autres : réencodage crate image) | images → `-sans-exif` | **P1** |
 | images-agrandir-ia | realesrgan-ncnn-vulkan + modèle | image → `-x4` | P3 |
 | images-detourer | imagemagick | image + couleur de fond/tolérance → PNG transparent | P3 |
-| images-pivoter | — (crate image) | images + angle → `-pivote` | P2 |
-| images-retourner | — (crate image) | images + axe → `-retourne` | P2 |
-| images-rogner | — (crate image) | image + rectangle → `-rogne` | P2 |
-| images-niveaux-de-gris | — (crate image) | images → `-gris` | P2 |
+| images-pivoter | — (crate image) | images + angle → `-pivote` | **P1** |
+| images-retourner | — (crate image) | images + axe → `-retourne` | **P1** |
+| images-rogner | — (crate image) | image + rectangle → `-rogne` | **P1** |
+| images-niveaux-de-gris | — (crate image) | images → `-gris` | **P1** |
 | images-filigrane | imagemagick | images + texte → `-filigrane` | P3 |
 | images-vers-ico | — (crate image) | image → .ico multi-tailles | P2 |
 | images-planche-contact | imagemagick (montage) | images → `planche.jpg` | P3 |

@@ -60,6 +60,89 @@ const QUALITY: OptionDef = OptionDef {
     default: "90",
 };
 
+const fn number(
+    key: &'static str,
+    label: &'static str,
+    max: f64,
+    default: &'static str,
+) -> OptionDef {
+    OptionDef {
+        key,
+        label,
+        kind: OptionKind::Number {
+            min: 0.0,
+            max,
+            step: 1.0,
+        },
+        default,
+    }
+}
+
+const fn choice(
+    key: &'static str,
+    label: &'static str,
+    choices: &'static [Choice],
+    default: &'static str,
+) -> OptionDef {
+    OptionDef {
+        key,
+        label,
+        kind: OptionKind::Choice { choices },
+        default,
+    }
+}
+
+const RESIZE_MODES: &[Choice] = &[
+    Choice {
+        value: "cote-max",
+        label: "Côté le plus long (px, sans agrandir)",
+    },
+    Choice {
+        value: "largeur",
+        label: "Largeur (px)",
+    },
+    Choice {
+        value: "hauteur",
+        label: "Hauteur (px)",
+    },
+    Choice {
+        value: "pourcent",
+        label: "Pourcentage",
+    },
+];
+const ANGLES: &[Choice] = &[
+    Choice {
+        value: "90",
+        label: "90° (horaire)",
+    },
+    Choice {
+        value: "180",
+        label: "180°",
+    },
+    Choice {
+        value: "270",
+        label: "270° (anti-horaire)",
+    },
+];
+const AXES: &[Choice] = &[
+    Choice {
+        value: "horizontal",
+        label: "Horizontal (miroir gauche-droite)",
+    },
+    Choice {
+        value: "vertical",
+        label: "Vertical (haut-bas)",
+    },
+];
+
+const fn ready(tool: ToolDef, options: &'static [OptionDef]) -> ToolDef {
+    ToolDef {
+        options,
+        status: Status::Phase1,
+        ..tool
+    }
+}
+
 const fn simple(
     id: &'static str,
     name: &'static str,
@@ -99,23 +182,35 @@ pub const TOOLS: &[ToolDef] = &[
         status: Status::Phase1,
         ..BASE
     },
-    simple(
-        "images-redimensionner",
-        "Redimensionner",
-        "Change la taille (pixels ou pourcentage), proportions conservées.",
-        "<nom>-redim.<ext>",
+    ready(
+        simple(
+            "images-redimensionner",
+            "Redimensionner",
+            "Change la taille (pixels ou pourcentage), proportions conservées.",
+            "<nom>-redim.<ext>",
+        ),
+        &[
+            choice("mode", "Mode", RESIZE_MODES, "cote-max"),
+            number("valeur", "Valeur", 20000.0, "1600"),
+        ],
     ),
-    simple(
-        "images-compresser",
-        "Compresser",
-        "Réduit le poids des images (qualité réglable).",
-        "<nom>-compresse.<ext>",
+    ready(
+        simple(
+            "images-compresser",
+            "Compresser",
+            "Réduit le poids des images en JPEG (qualité réglable, transparence sur fond blanc).",
+            "<nom>-compresse.jpg",
+        ),
+        &[number("qualite", "Qualité JPEG (1-100)", 100.0, "75")],
     ),
-    simple(
-        "images-supprimer-exif",
-        "Supprimer les données EXIF",
-        "Retire position GPS, appareil et autres métadonnées.",
-        "<nom>-sans-exif.<ext>",
+    ready(
+        simple(
+            "images-supprimer-exif",
+            "Supprimer les données EXIF",
+            "Retire position GPS, appareil et autres métadonnées (JPEG : sans réencodage).",
+            "<nom>-sans-exif.<ext>",
+        ),
+        &[],
     ),
     ToolDef {
         id: "images-agrandir-ia",
@@ -139,32 +234,49 @@ pub const TOOLS: &[ToolDef] = &[
         status: Status::Phase3,
         ..BASE
     },
-    simple(
-        "images-pivoter",
-        "Pivoter",
-        "Fait pivoter de 90, 180 ou 270 degrés.",
-        "<nom>-pivote.<ext>",
+    ready(
+        simple(
+            "images-pivoter",
+            "Pivoter",
+            "Fait pivoter de 90, 180 ou 270 degrés.",
+            "<nom>-pivote.<ext>",
+        ),
+        &[choice("angle", "Angle", ANGLES, "90")],
     ),
-    simple(
-        "images-retourner",
-        "Retourner (miroir)",
-        "Retourne horizontalement ou verticalement.",
-        "<nom>-retourne.<ext>",
+    ready(
+        simple(
+            "images-retourner",
+            "Retourner (miroir)",
+            "Retourne horizontalement ou verticalement.",
+            "<nom>-retourne.<ext>",
+        ),
+        &[choice("axe", "Axe", AXES, "horizontal")],
     ),
-    ToolDef {
-        input: single(IMAGE_EXT),
-        ..simple(
-            "images-rogner",
-            "Rogner",
-            "Recadre l'image sur un rectangle.",
-            "<nom>-rogne.<ext>",
-        )
-    },
-    simple(
-        "images-niveaux-de-gris",
-        "Niveaux de gris",
-        "Convertit en noir et blanc (niveaux de gris).",
-        "<nom>-gris.<ext>",
+    ready(
+        ToolDef {
+            input: single(IMAGE_EXT),
+            ..simple(
+                "images-rogner",
+                "Rogner",
+                "Recadre l'image sur un rectangle.",
+                "<nom>-rogne.<ext>",
+            )
+        },
+        &[
+            number("x", "Gauche (px)", 20000.0, "0"),
+            number("y", "Haut (px)", 20000.0, "0"),
+            number("largeur", "Largeur (px)", 20000.0, "100"),
+            number("hauteur", "Hauteur (px)", 20000.0, "100"),
+        ],
+    ),
+    ready(
+        simple(
+            "images-niveaux-de-gris",
+            "Niveaux de gris",
+            "Convertit en noir et blanc (niveaux de gris).",
+            "<nom>-gris.<ext>",
+        ),
+        &[],
     ),
     ToolDef {
         binaries: MAGICK,
