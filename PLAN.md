@@ -178,27 +178,28 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | images-ocr-texte | tesseract (fra+eng) | image → .txt | P3 |
 | images-assembler-gif | — (crate image) | images → GIF animé | P2 |
 
-### Vidéo / audio (18)
+### Vidéo / audio (19)
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
-| video-convertir | ffmpeg | vidéo → mp4/mkv/webm/mov | P2 |
-| video-compresser | ffmpeg | vidéo + CRF → `-compresse.mp4` | P2 |
-| video-couper | ffmpeg | vidéo + début/fin → `-extrait` | P2 |
-| video-extraire-audio | ffmpeg | vidéo → mp3/m4a/wav/flac | P2 |
+| video-convertir | ffmpeg | vidéo → mp4/mkv/webm/mov | **P1** |
+| video-compresser | ffmpeg | vidéo + CRF → `-compresse.mp4` | **P1** |
+| video-couper | ffmpeg | vidéo + début/fin → `-extrait` | **P1** |
+| video-extraire-audio | ffmpeg | vidéo → mp3/m4a/wav/flac | **P1** |
 | video-vers-gif | ffmpeg | vidéo + plage/fps/largeur → .gif (palette) | P2 |
-| video-extraire-image | ffmpeg | vidéo + horodatage → .png | P2 |
+| video-extraire-image | ffmpeg | vidéo + horodatage → .png | **P1** |
 | video-sous-titres | ffmpeg + whisper-cli + modèle | vidéo → .srt | P3 |
 | video-incruster-sous-titres | ffmpeg | vidéo + .srt → `-soustitre.mp4` | P3 |
 | video-redimensionner | ffmpeg | vidéo + hauteur → `-720p` … | P2 |
 | video-pivoter | ffmpeg | vidéo + angle → `-pivote` | P2 |
-| video-supprimer-son | ffmpeg | vidéo → `-muet` | P2 |
+| video-supprimer-son | ffmpeg | vidéo → `-muet` | **P1** |
 | video-accelerer | ffmpeg | vidéo + facteur → `-x2` … | P3 |
 | video-telecharger | yt-dlp (+ ffmpeg) | URL + qualité → vidéo dans Téléchargements | P3 |
 | audio-telecharger | yt-dlp (+ ffmpeg) | URL → mp3/m4a | P3 |
-| audio-convertir | ffmpeg | audio → mp3/m4a/ogg/opus/wav/flac | P2 |
-| audio-couper | ffmpeg | audio + début/fin → `-extrait` | P2 |
+| audio-convertir | ffmpeg | audio → mp3/m4a/ogg/opus/wav/flac | **P1** |
+| audio-couper | ffmpeg | audio + début/fin → `-extrait` | **P1** |
 | audio-normaliser | ffmpeg (loudnorm) | audio → `-normalise` | P2 |
 | audio-transcrire | ffmpeg + whisper-cli + modèle | audio → .txt | P3 |
+| video-infos | ffmpeg (ffprobe) | vidéo/audio → `-infos.txt` (durée, pistes, codecs) | **P1** |
 
 ### Archives (9)
 | id | binaire | entrées → sortie | statut |
@@ -221,7 +222,8 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | utilitaires-renommer-lot | — | fichiers + motif → copies renommées (jamais d'écrasement) | P3 |
 | utilitaires-qrcode | — (crate qrcode) | texte → .png | P3 |
 
-Total : 18 + 15 + 17 + 18 + 9 + 4 = **81** (80 prévus + `pdf-infos` ajouté en phase 2b).
+Total : 18 + 15 + 17 + 19 + 9 + 4 = **82** (80 prévus + `pdf-infos` et `video-infos`
+ajoutés en phase 2b).
 
 ---
 

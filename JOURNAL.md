@@ -134,3 +134,12 @@ Progression (une ligne par groupe) :
   vérifié pour les 13 outils, échec → erreur typée sans sortie). md/docx→PDF
   restent P2 (typst). pandoc absent de la VM : aucune conversion réelle testée.
   fmt OK, clippy OK, test 110/110.
+- Groupe Vidéo/audio (ffmpeg) : `video-convertir` (mp4/mkv/mov H.264+AAC,
+  webm VP9+Opus), `video-compresser` (CRF), `video-couper` / `audio-couper`
+  (précis ou rapide sans réencodage), `video-extraire-audio`, `audio-convertir`,
+  `video-extraire-image`, `video-supprimer-son`, nouvel outil `video-infos`
+  (ffprobe, secours en-tête ffmpeg ; registre : 82 outils). Progression réelle
+  (`-progress pipe:1` / `Duration:`). Sortie réservée avant l'appel (le `-y`
+  ne touche que notre réservation). Tests : arguments purs + bout en bout avec
+  le **vrai** ffmpeg 8.1.2 de la VM sur un clip généré (lavfi), ignorés
+  proprement si ffmpeg est absent (CI). fmt OK, clippy OK, test 115/115.

@@ -6,6 +6,7 @@ pub mod archives_extract;
 pub mod documents;
 pub mod images;
 pub mod images_edit;
+pub mod media;
 pub mod pdf;
 pub mod pdf_images;
 pub mod pdf_pages;
@@ -51,6 +52,15 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("images-retourner", images_edit::flip),
     ("images-rogner", images_edit::crop),
     ("images-niveaux-de-gris", images_edit::grayscale),
+    ("video-convertir", media::convert_video),
+    ("video-compresser", media::compress_video),
+    ("video-couper", media::cut),
+    ("video-extraire-audio", media::to_audio),
+    ("video-extraire-image", media::frame),
+    ("video-supprimer-son", media::mute),
+    ("video-infos", media::info),
+    ("audio-convertir", media::to_audio),
+    ("audio-couper", media::cut),
     ("archives-creer-zip", archives::create_zip),
     ("archives-extraire-zip", archives_extract::extract_zip),
     ("archives-creer-tar", archives::create_tar),
