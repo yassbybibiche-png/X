@@ -13,11 +13,18 @@ const etat = {
   fichiers: [],
   tache: null,
   recherche: "",
+  telechargements: new Map(), // jobId -> { binaire, termine, total, message }
 };
 
 const PHASES = { phase1: "Disponible", phase2: "Prévu en phase 2", phase3: "Prévu en phase 3" };
 const ORIGINES = { bundled: "incluse", "app-data": "données de l'app", "system-path": "PATH système" };
 const MODES = { bundled: "inclus dans l'installeur", "first-use": "téléchargé au premier usage" };
+const ETATS = { present: "Présent", telechargeable: "Absent — téléchargeable", absent: "Absent" };
+
+function taille(octets) {
+  if (!octets) return "";
+  return octets >= 1e6 ? (octets / 1e6).toFixed(0) + " Mo" : Math.ceil(octets / 1e3) + " ko";
+}
 
 const $ = (sel, racine = document) => racine.querySelector(sel);
 
@@ -107,6 +114,7 @@ function choisirOutil(outil) {
   statut.className = "statut " + (raison ? "indisponible" : "disponible");
   $(".choisir", panneau).addEventListener("click", choisirFichiers);
   $(".lancer", panneau).addEventListener("click", lancer);
+  $(".annuler", panneau).addEventListener("click", annuler);
   construireOptions($(".options", panneau), outil.options);
   afficherFichiers();
 }
@@ -191,6 +199,32 @@ function journal(message, type = "log") {
   ol.scrollTop = ol.scrollHeight;
 }
 
+function avertir(message) {
+  const bloc = $("#panneau .avertissements");
+  if (!bloc) return;
+  bloc.hidden = false;
+  $("ul", bloc).append(el("li", message));
+}
+
+function enCours(actif) {
+  const annuler = $("#panneau .annuler");
+  if (annuler) {
+    annuler.hidden = !actif;
+    annuler.disabled = false;
+  }
+}
+
+async function annuler() {
+  if (etat.tache === null) return;
+  $("#panneau .annuler").disabled = true;
+  journal("Annulation demandée…");
+  try {
+    await invoke("cancel_job", { jobId: etat.tache });
+  } catch (e) {
+    journal(String(e), "error");
+  }
+}
+
 function progression(pourcent) {
   const bloc = $("#panneau .progression");
   if (!bloc) return;
@@ -203,9 +237,13 @@ async function lancer() {
   const outil = etat.outil;
   $("#panneau .lancer").disabled = true;
   progression(0);
+  const bloc = $("#panneau .avertissements");
+  bloc.hidden = true;
+  $("ul", bloc).replaceChildren();
   journal(`Lancement de « ${outil.name} » sur ${etat.fichiers.length} fichier(s)…`);
   try {
     etat.tache = await invoke("run_tool", { toolId: outil.id, inputs: etat.fichiers, options: lireOptions() });
+    enCours(true);
   } catch (e) {
     journal(String(e), "error");
     afficherFichiers();
@@ -216,14 +254,18 @@ function surEvenement({ payload: ev }) {
   if (ev.jobId !== etat.tache) return;
   if (ev.percent !== null) progression(ev.percent);
   if (ev.kind === "progress" || ev.kind === "log") journal(ev.message);
-  else if (ev.kind === "warning") journal("⚠ " + ev.message, "warning");
+  else if (ev.kind === "warning") {
+    journal("⚠ " + ev.message, "warning");
+    avertir(ev.message);
+  } else if (ev.kind === "cancelled") journal(ev.message, "warning");
   else if (ev.kind === "error") journal("Erreur : " + ev.message, "error");
   else if (ev.kind === "done") {
     journal(ev.message, "done");
     for (const o of ev.outputs) journal("→ " + o, "done");
   }
-  if (ev.kind === "done" || ev.kind === "error") {
+  if (ev.kind === "done" || ev.kind === "error" || ev.kind === "cancelled") {
     etat.tache = null;
+    enCours(false);
     afficherFichiers();
   }
 }
@@ -250,10 +292,10 @@ async function diagnostic() {
 }
 
 function ligneBinaire(b) {
-  const tr = el("tr", undefined, b.present ? "present" : "absent");
+  const tr = el("tr", undefined, b.state);
   const cellules = [
     b.label,
-    b.present ? "Présent" : "Absent",
+    ETATS[b.state] ?? (b.present ? "Présent" : "Absent"),
     b.version ?? "—",
     b.source ? ORIGINES[b.source] : "—",
     b.path ?? "—",
@@ -261,7 +303,80 @@ function ligneBinaire(b) {
     MODES[b.delivery],
   ];
   for (const c of cellules) tr.append(el("td", c));
+  tr.append(celluleAction(b));
   return tr;
+}
+
+function messageDiagnostic(texte, classe = "") {
+  const p = $("#diag-message");
+  p.textContent = texte;
+  p.className = "aide " + classe;
+}
+
+function telechargementDe(binaire) {
+  for (const [id, t] of etat.telechargements) if (t.binaire === binaire) return [id, t];
+  return null;
+}
+
+function celluleAction(b) {
+  const td = el("td");
+  const encours = telechargementDe(b.id);
+  if (encours) {
+    const [jobId, t] = encours;
+    const bloc = el("div", undefined, "telechargement");
+    const barre = document.createElement("progress");
+    barre.max = t.total || 1;
+    barre.value = t.termine;
+    const annulerDl = el("button", "Annuler", "petit");
+    annulerDl.type = "button";
+    annulerDl.addEventListener("click", () => invoke("cancel_job", { jobId }).catch((e) => messageDiagnostic(String(e), "error")));
+    bloc.append(barre, el("span", t.message || taille(t.termine) + " / " + taille(t.total)), annulerDl);
+    td.append(bloc);
+  } else if (b.state === "telechargeable") {
+    const bouton = el("button", `Télécharger ${b.pinnedVersion ?? ""} (${taille(b.downloadSize)})`, "petit");
+    bouton.type = "button";
+    bouton.title = `Licence : ${b.license}. Téléchargement depuis une source épinglée, empreinte SHA-256 vérifiée.`;
+    bouton.addEventListener("click", () => telecharger(b));
+    td.append(bouton);
+  } else if (b.state === "absent") {
+    td.textContent = b.unavailableReason ?? "Non disponible sur ce système";
+  } else {
+    td.textContent = "—";
+  }
+  return td;
+}
+
+async function telecharger(b) {
+  try {
+    const jobId = await invoke("download_binary", { binary: b.id });
+    etat.telechargements.set(jobId, { binaire: b.id, termine: 0, total: b.downloadSize ?? 0, message: "" });
+    rafraichirDiagnostic();
+  } catch (e) {
+    messageDiagnostic(`Téléchargement de ${b.label} impossible : ${e}`, "error");
+  }
+}
+
+function rafraichirDiagnostic() {
+  $("#binaires").replaceChildren(...[...etat.binaires.values()].map(ligneBinaire));
+}
+
+function surTelechargement({ payload: ev }) {
+  const t = etat.telechargements.get(ev.jobId);
+  if (!t) return;
+  if (ev.kind === "progress") {
+    t.termine = ev.done;
+    t.total = ev.total;
+    t.message = "";
+  } else if (ev.kind === "log") {
+    t.message = ev.message;
+  } else {
+    etat.telechargements.delete(ev.jobId);
+    const echec = ev.kind === "error";
+    messageDiagnostic(echec ? `Échec du téléchargement : ${ev.message}` : ev.message, echec ? "error" : "");
+    diagnostic();
+    return;
+  }
+  rafraichirDiagnostic();
 }
 
 // ---------- Glisser-déposer ----------
@@ -304,6 +419,7 @@ async function demarrer() {
   afficherCategories();
   afficherOutils();
   await listen("job-event", surEvenement);
+  await listen("download-event", surTelechargement);
   await activerDepot();
   diagnostic();
 }

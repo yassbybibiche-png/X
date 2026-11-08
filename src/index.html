@@ -39,10 +39,11 @@
         de l'application (téléchargement au premier usage), 3) PATH du système.
       </p>
       <button type="button" id="rafraichir">Relancer le diagnostic</button>
+      <p id="diag-message" class="aide" role="status"></p>
       <table>
         <thead>
           <tr>
-            <th>Binaire</th><th>État</th><th>Version</th><th>Origine</th><th>Chemin</th><th>Licence</th><th>Mode</th>
+            <th>Binaire</th><th>État</th><th>Version</th><th>Origine</th><th>Chemin</th><th>Licence</th><th>Mode</th><th>Action</th>
           </tr>
         </thead>
         <tbody id="binaires"></tbody>
@@ -60,7 +61,14 @@
       </div>
       <ul class="fichiers"></ul>
       <form class="options"></form>
-      <button type="button" class="lancer">Lancer</button>
+      <div class="actions">
+        <button type="button" class="lancer">Lancer</button>
+        <button type="button" class="annuler" hidden>Annuler</button>
+      </div>
+      <div class="avertissements" role="alert" hidden>
+        <strong>Avertissements</strong>
+        <ul></ul>
+      </div>
       <div class="progression" hidden>
         <progress max="100" value="0"></progress>
         <span class="pourcent">0 %</span>

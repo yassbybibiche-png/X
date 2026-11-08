@@ -143,3 +143,11 @@ Progression (une ligne par groupe) :
   ne touche que notre réservation). Tests : arguments purs + bout en bout avec
   le **vrai** ffmpeg 8.1.2 de la VM sur un clip généré (lavfi), ignorés
   proprement si ffmpeg est absent (CI). fmt OK, clippy OK, test 115/115.
+- Groupe Frontend : Diagnostic avec colonne « Action » — bouton « Télécharger
+  <version> (<taille>) » pour les binaires téléchargeables (commande
+  `download_binary`, événements `download-event` : barre de progression,
+  bouton « Annuler » via `cancel_job`, diagnostic relancé à la fin), raison
+  affichée si non disponible. Panneau outil : bouton « Annuler » (`cancel_job`)
+  pendant une tâche, gestion de l'événement `cancelled`, bandeau jaune
+  « Avertissements » (images distantes retirées, etc.). `node --check` OK ;
+  non testé graphiquement (VM sans GUI).
