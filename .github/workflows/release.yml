@@ -107,13 +107,16 @@ jobs:
           exe="$(cargo run --quiet --example installer -- 7zip ../deps/bin --depuis ../deps/dl)"
           echo "7-Zip installé : $exe"
           mkdir -p binaries
+          # Dossier fixe de download::install_dir (évite dirname sur un chemin
+          # Windows aux séparateurs mixtes).
+          d=../deps/bin/7zip
           # Licence 7-Zip : à reproduire avec le binaire (voir THIRD_PARTY.md).
-          lic="$(dirname "$exe")/License.txt"
-          [ -f "$lic" ] || lic="$(dirname "$exe")/license.txt"
+          lic="$d/License.txt"
+          [ -f "$lic" ] || lic="$d/license.txt"
           cp "$lic" binaries/7zip-License.txt
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "$exe" "binaries/7z-${{ matrix.triple }}.exe"
-            cp "$(dirname "$exe")/7z.dll" binaries/7z.dll
+            cp "$d/7z.dll" binaries/7z.dll
           else
             cp "$exe" "binaries/7zz-${{ matrix.triple }}"
             chmod +x "binaries/7zz-${{ matrix.triple }}"
