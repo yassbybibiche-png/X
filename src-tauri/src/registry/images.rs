@@ -4,6 +4,11 @@ use super::{
 use crate::sidecar::Binary;
 
 const C: Category = Category::Images;
+/// Entrées de la conversion : formats intégrés + HEIC/HEIF/AVIF (ImageMagick).
+const CONVERT_EXT: &[&str] = &[
+    "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "ico", "tga", "qoi", "heic", "heif",
+    "avif",
+];
 const MAGICK: &[Binary] = &[Binary::ImageMagick];
 
 pub const FORMAT_CHOICES: &[Choice] = &[
@@ -45,7 +50,7 @@ pub const FORMAT_CHOICES: &[Choice] = &[
     },
     Choice {
         value: "avif",
-        label: "AVIF (ImageMagick, phase 2)",
+        label: "AVIF (ImageMagick, si la build l'écrit)",
     },
 ];
 
@@ -135,6 +140,45 @@ const AXES: &[Choice] = &[
     },
 ];
 
+const MODELS: &[Choice] = &[
+    Choice {
+        value: "photo",
+        label: "Photo (realesrgan-x4plus)",
+    },
+    Choice {
+        value: "dessin",
+        label: "Dessin / anime (realesrgan-x4plus-anime)",
+    },
+];
+const POSITIONS: &[Choice] = &[
+    Choice {
+        value: "bas-droite",
+        label: "En bas à droite",
+    },
+    Choice {
+        value: "bas-gauche",
+        label: "En bas à gauche",
+    },
+    Choice {
+        value: "haut-droite",
+        label: "En haut à droite",
+    },
+    Choice {
+        value: "centre",
+        label: "Au centre",
+    },
+];
+const WEB_FORMATS: &[Choice] = &[
+    Choice {
+        value: "jpg",
+        label: "JPEG (qualité 80)",
+    },
+    Choice {
+        value: "webp",
+        label: "WebP avec perte (ImageMagick)",
+    },
+];
+
 const fn ready(tool: ToolDef, options: &'static [OptionDef]) -> ToolDef {
     ToolDef {
         options,
@@ -165,8 +209,8 @@ pub const TOOLS: &[ToolDef] = &[
         id: "images-convertir",
         category: C,
         name: "Convertir des images",
-        description: "Convertit des images vers PNG, JPEG, WebP, BMP, TIFF, GIF, ICO, TGA ou QOI (moteur intégré).",
-        input: files(IMAGE_EXT),
+        description: "Convertit des images vers PNG, JPEG, WebP, BMP, TIFF, GIF, ICO, TGA, QOI (moteur intégré) ou AVIF ; lit aussi HEIC/AVIF (ImageMagick).",
+        input: files(CONVERT_EXT),
         output: "<nom>.<format>",
         options: &[
             OptionDef {
@@ -219,20 +263,28 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Agrandit une image avec Real-ESRGAN (modèle local téléchargé au premier usage).",
         binaries: &[Binary::RealEsrgan],
         input: files(IMAGE_EXT),
-        output: "<nom>-x4.png",
-        status: Status::Phase3,
-        ..BASE
+        output: "<nom>-x4.png (sans GPU Vulkan : <nom>-x4-lanczos.png, signalé)",
+        options: &[choice("modele", "Type d'image", MODELS, "photo")],
+        status: Status::Phase1,
     },
     ToolDef {
         id: "images-detourer",
         category: C,
         name: "Détourage simple",
-        description: "Rend transparent un fond uni (couleur et tolérance réglables).",
+        description: "Rend transparent un fond uni touchant les bords (couleur du coin ou choisie, tolérance réglable).",
         binaries: MAGICK,
         input: files(IMAGE_EXT),
         output: "<nom>-detoure.png",
-        status: Status::Phase3,
-        ..BASE
+        options: &[
+            OptionDef {
+                key: "couleur",
+                label: "Couleur du fond (auto ou #rrggbb)",
+                kind: OptionKind::Text,
+                default: "auto",
+            },
+            number("tolerance", "Tolérance (%)", 100.0, "12"),
+        ],
+        status: Status::Phase1,
     },
     ready(
         simple(
@@ -280,7 +332,17 @@ pub const TOOLS: &[ToolDef] = &[
     ),
     ToolDef {
         binaries: MAGICK,
-        status: Status::Phase3,
+        status: Status::Phase1,
+        options: &[
+            OptionDef {
+                key: "texte",
+                label: "Texte",
+                kind: OptionKind::Text,
+                default: "© Moi",
+            },
+            choice("position", "Position", POSITIONS, "bas-droite"),
+            number("opacite", "Opacité (%)", 100.0, "50"),
+        ],
         ..simple(
             "images-filigrane",
             "Filigrane texte",
@@ -290,6 +352,7 @@ pub const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         input: single(IMAGE_EXT),
+        status: Status::Phase1,
         ..simple(
             "images-vers-ico",
             "Créer une icône",
@@ -299,7 +362,17 @@ pub const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         binaries: MAGICK,
-        status: Status::Phase3,
+        status: Status::Phase1,
+        options: &[
+            number("colonnes", "Colonnes", 20.0, "4"),
+            number("taille", "Taille des vignettes (px)", 1024.0, "200"),
+            OptionDef {
+                key: "etiquettes",
+                label: "Afficher les noms de fichiers",
+                kind: OptionKind::Bool,
+                default: "false",
+            },
+        ],
         ..simple(
             "images-planche-contact",
             "Planche contact",
@@ -307,21 +380,48 @@ pub const TOOLS: &[ToolDef] = &[
             "planche.jpg",
         )
     },
-    simple(
-        "images-bordure",
-        "Ajouter une bordure",
-        "Ajoute un cadre de couleur et d'épaisseur choisies.",
-        "<nom>-bordure.<ext>",
+    ready(
+        simple(
+            "images-bordure",
+            "Ajouter une bordure",
+            "Ajoute un cadre de couleur et d'épaisseur choisies.",
+            "<nom>-bordure.<ext>",
+        ),
+        &[
+            number("epaisseur", "Épaisseur (px)", 2000.0, "20"),
+            OptionDef {
+                key: "couleur",
+                label: "Couleur (#rrggbb)",
+                kind: OptionKind::Text,
+                default: "#ffffff",
+            },
+        ],
     ),
-    simple(
-        "images-optimiser-web",
-        "Optimiser pour le web",
-        "Redimensionne (côté max.) et recompresse pour le web.",
-        "<nom>-web.jpg / .webp",
+    ready(
+        simple(
+            "images-optimiser-web",
+            "Optimiser pour le web",
+            "Redimensionne (côté max.), retire les métadonnées et recompresse (JPEG intégré, WebP avec perte via ImageMagick).",
+            "<nom>-web.jpg / .webp",
+        ),
+        &[
+            number("cote_max", "Côté maximal (px)", 8000.0, "1920"),
+            choice("format", "Format", WEB_FORMATS, "jpg"),
+        ],
+    ),
+    ready(
+        simple(
+            "images-vignettes",
+            "Créer des vignettes",
+            "Crée une miniature de chaque image (côté max. choisi, format d'origine).",
+            "<nom>-vignette.<ext>",
+        ),
+        &[number("taille", "Côté maximal (px)", 2048.0, "256")],
     ),
     ToolDef {
         binaries: &[Binary::Tesseract],
-        status: Status::Phase3,
+        status: Status::Phase1,
+        options: &[super::pdf::OCR_LANG],
         ..simple(
             "images-ocr-texte",
             "Image vers texte (OCR)",
@@ -329,10 +429,28 @@ pub const TOOLS: &[ToolDef] = &[
             "<nom>.txt",
         )
     },
-    simple(
-        "images-assembler-gif",
-        "Créer un GIF animé",
-        "Assemble des images en GIF animé (délai réglable).",
-        "<premiere>-anime.gif",
-    ),
+    ToolDef {
+        input: super::InputSpec {
+            min_files: 2,
+            ..files(IMAGE_EXT)
+        },
+        ..ready(
+            simple(
+                "images-assembler-gif",
+                "Créer un GIF animé",
+                "Assemble des images (dans l'ordre) en GIF animé en boucle, délai réglable.",
+                "<premiere>-anime.gif",
+            ),
+            &[OptionDef {
+                key: "delai",
+                label: "Délai entre images (ms)",
+                kind: OptionKind::Number {
+                    min: 20.0,
+                    max: 10000.0,
+                    step: 10.0,
+                },
+                default: "500",
+            }],
+        )
+    },
 ];

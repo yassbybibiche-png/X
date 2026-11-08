@@ -157,26 +157,27 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | documents-epub-vers-md | pandoc | .epub → .md | **P1** |
 | documents-extraire-texte | pandoc | .docx/.odt/.html/.epub/.md/.rtf → .txt | **P1** |
 
-### Images (17)
+### Images (18)
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
-| images-convertir | — (crate image) ; imagemagick pour AVIF/HEIC (P2) | images → png/jpg/webp/bmp/tiff/gif/ico | **P1** |
+| images-convertir | — (crate image) ; imagemagick pour AVIF/HEIC | images (+ .heic/.heif/.avif) → png/jpg/webp/bmp/tiff/gif/ico/tga/qoi/avif ; erreur claire si la build IM ne lit/n'écrit pas le format | **P1** |
 | images-redimensionner | — (crate image) | images + taille/% → `-redim` | **P1** |
 | images-compresser | — (crate image) | images + qualité → `-compresse.jpg` | **P1** |
 | images-supprimer-exif | — (JPEG : segments retirés sans réencodage ; autres : réencodage crate image) | images → `-sans-exif` | **P1** |
-| images-agrandir-ia | realesrgan-ncnn-vulkan + modèle | image → `-x4` | P3 |
-| images-detourer | imagemagick | image + couleur de fond/tolérance → PNG transparent | P3 |
+| images-agrandir-ia | realesrgan-ncnn-vulkan + modèles (zip officiel) | image → `-x4.png` ; sans GPU Vulkan : repli Lanczos **signalé** `-x4-lanczos.png` | **P1** |
+| images-detourer | imagemagick | image + couleur de fond (auto = coin) / tolérance → PNG transparent (remplissage depuis les bords ; rembg = option future) | **P1** |
 | images-pivoter | — (crate image) | images + angle → `-pivote` | **P1** |
 | images-retourner | — (crate image) | images + axe → `-retourne` | **P1** |
 | images-rogner | — (crate image) | image + rectangle → `-rogne` | **P1** |
 | images-niveaux-de-gris | — (crate image) | images → `-gris` | **P1** |
-| images-filigrane | imagemagick | images + texte → `-filigrane` | P3 |
-| images-vers-ico | — (crate image) | image → .ico multi-tailles | P2 |
-| images-planche-contact | imagemagick (montage) | images → `planche.jpg` | P3 |
-| images-bordure | — (crate image) | images + épaisseur/couleur → `-bordure` | P2 |
-| images-optimiser-web | — (crate image) | images → JPEG/WebP redimensionné ≤ N px | P2 |
-| images-ocr-texte | tesseract (fra+eng) | image → .txt | P3 |
-| images-assembler-gif | — (crate image) | images → GIF animé | P2 |
+| images-filigrane | imagemagick | images + texte + position + opacité → `-filigrane` | **P1** |
+| images-vers-ico | — (crate image) | image → .ico 16 à 256 px (carré transparent) | **P1** |
+| images-planche-contact | imagemagick (montage) | images → `planche.jpg` | **P1** |
+| images-bordure | — (crate image) | images + épaisseur/couleur → `-bordure` | **P1** |
+| images-optimiser-web | — (crate image) ; imagemagick pour WebP avec perte | images → JPEG q80 / WebP q80 redimensionné ≤ N px, sans métadonnées | **P1** |
+| images-ocr-texte | tesseract (fra+eng) | image → .txt | **P1** |
+| images-assembler-gif | — (crate image) | ≥2 images → GIF animé en boucle | **P1** |
+| images-vignettes | — (crate image) | images + côté max. → `-vignette.<ext>` (ajouté en phase 3a) | **P1** |
 
 ### Vidéo / audio (19)
 | id | binaire | entrées → sortie | statut |

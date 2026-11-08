@@ -10,6 +10,7 @@ use image::{DynamicImage, ImageFormat, ImageReader, RgbImage};
 
 use crate::jobs::ToolContext;
 use crate::output;
+use crate::tools::images_magick::{convert_with_magick, needs_magick};
 use crate::tools::per_file;
 
 /// Côté maximal d'une icône ICO.
@@ -40,9 +41,9 @@ impl OutFormat {
             "ico" => Self::Ico,
             "tga" => Self::Tga,
             "qoi" => Self::Qoi,
-            "avif" | "heic" => bail!(
-                "Le format {value} nécessite ImageMagick : non implémenté en phase 1 (prévu en phase 2)."
-            ),
+            "avif" | "heic" | "heif" => {
+                bail!("Le format {value} nécessite ImageMagick (outil « Convertir des images »).")
+            }
             other => bail!("Format de sortie inconnu : {other}"),
         })
     }
@@ -87,11 +88,27 @@ pub(crate) fn parse_quality(value: &str) -> Result<u8> {
     Ok(q.round() as u8)
 }
 
-/// `images-convertir`.
+/// `images-convertir` : moteur intégré, ou ImageMagick si l'entrée ou la
+/// sortie est AVIF/HEIC (erreur claire si la build ne gère pas le format).
 pub fn convert(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
-    let format = OutFormat::parse(ctx.input.option("format"))?;
+    let target = ctx.input.option("format").to_ascii_lowercase();
     let quality = parse_quality(ctx.input.option("qualite"))?;
-    per_file(ctx, |path| convert_one(path, format, quality))
+    let builtin = if needs_magick(&target) {
+        None
+    } else {
+        Some(OutFormat::parse(&target)?)
+    };
+    per_file(ctx, |path| {
+        let in_ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_string())
+            .unwrap_or_default();
+        match builtin {
+            Some(f) if !needs_magick(&in_ext) => convert_one(path, f, quality),
+            Some(f) => convert_with_magick(ctx, path, f.extension(), quality),
+            None => convert_with_magick(ctx, path, &target, quality),
+        }
+    })
 }
 
 pub fn open(path: &Path) -> Result<DynamicImage> {
@@ -256,12 +273,13 @@ mod tests {
     }
 
     #[test]
-    fn avif_non_implemente_explicite() {
+    fn avif_sans_imagemagick_message_clair() {
         let tmp = tempfile::tempdir().unwrap();
         let src = tmp.path().join("a.png");
         make_png(&src, 2, 2);
-        let err = convert_to(&src, "avif").unwrap_err().to_string();
-        assert!(err.contains("non implémenté en phase 1"), "{err}");
+        let err = format!("{:#}", convert_to(&src, "avif").unwrap_err());
+        assert!(err.contains("nécessite ImageMagick"), "{err}");
+        assert!(!tmp.path().join("a.avif").exists());
     }
 
     #[test]

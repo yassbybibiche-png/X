@@ -6,7 +6,11 @@ pub mod archives_extract;
 pub mod documents;
 pub mod gs;
 pub mod images;
+pub mod images_ai;
 pub mod images_edit;
+pub mod images_extra;
+pub mod images_magick;
+pub mod magick;
 pub mod media;
 pub mod ocr;
 pub mod pdf;
@@ -69,6 +73,16 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("images-retourner", images_edit::flip),
     ("images-rogner", images_edit::crop),
     ("images-niveaux-de-gris", images_edit::grayscale),
+    ("images-vers-ico", images_extra::to_ico),
+    ("images-bordure", images_extra::border),
+    ("images-vignettes", images_extra::thumbnails),
+    ("images-optimiser-web", web_optimize),
+    ("images-assembler-gif", images_extra::animated_gif),
+    ("images-filigrane", images_magick::watermark),
+    ("images-detourer", images_magick::cutout),
+    ("images-planche-contact", images_magick::contact_sheet),
+    ("images-agrandir-ia", images_ai::upscale),
+    ("images-ocr-texte", images_ai::ocr_text),
     ("video-convertir", media::convert_video),
     ("video-compresser", media::compress_video),
     ("video-couper", media::cut),
@@ -86,6 +100,23 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("archives-lister", archives_extract::list),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
 ];
+
+/// `images-optimiser-web` : JPEG (intégré) ou WebP avec perte (ImageMagick).
+fn web_optimize(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
+    let side: u32 = ctx
+        .input
+        .option("cote_max")
+        .trim()
+        .parse()
+        .ok()
+        .filter(|v| (16..=8000).contains(v))
+        .ok_or_else(|| anyhow::anyhow!("côté maximal invalide (16 à 8000 px)"))?;
+    match ctx.input.option("format") {
+        "jpg" => per_file(ctx, |p| images_extra::web_jpeg(ctx, side, p)),
+        "webp" => per_file(ctx, |p| images_magick::web_webp(ctx, side, p)),
+        other => bail!("format inconnu : {other}"),
+    }
+}
 
 pub fn implementation(id: &str) -> Option<ToolFn> {
     IMPLEMENTED.iter().find(|(k, _)| *k == id).map(|(_, f)| *f)

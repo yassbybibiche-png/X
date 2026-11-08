@@ -209,3 +209,20 @@ Progression (une ligne par groupe) :
   réparation d'une xref cassée, rastérisation), Tesseract (texte « BONJOUR »
   retrouvé dans un PDF image), qpdf (chiffrement, mauvais mot de passe refusé
   sans sortie, déchiffrement). PDF 18/18. fmt OK, clippy OK, test 131/131.
+- Groupe Images : ImageMagick accepté sous `magick` (v7) **et** `convert` (v6,
+  jamais sous Windows où `convert.exe` est un outil système) ; `montage` =
+  `magick montage` ou binaire voisin. `images-convertir` lit HEIC/HEIF/AVIF et
+  écrit AVIF via ImageMagick, avec erreur claire si la build ne gère pas le
+  format (ici IM 6.9.12 : AVIF/HEIC en lecture seule → écriture AVIF refusée
+  proprement, lecture AVIF testée sur un fichier produit par ffmpeg).
+  `images-filigrane` (texte échappé : `%`, `@fichier`), `images-detourer` (fond
+  uni depuis les bords, tolérance ; rembg = option future), `images-planche-contact`,
+  `images-optimiser-web` (JPEG intégré / WebP avec perte IM), `images-vers-ico`
+  (7 tailles), `images-bordure`, `images-assembler-gif`, nouvel outil
+  `images-vignettes` (registre : 83), `images-ocr-texte` (Tesseract réel),
+  `images-agrandir-ia` (Real-ESRGAN : binaire + modèles du zip officiel ajoutés
+  au manifeste, SHA-256 calculés au téléchargement faute d'empreinte amont ;
+  installé dans `.scratch` par l'installeur de l'app). Sans GPU Vulkan (cas de
+  la VM : « vkCreateInstance failed »), repli Lanczos ×4 **signalé**
+  (`-x4-lanczos.png`) ; chemin IA testé avec un faux binaire (arguments,
+  modèles, progression). Images 18/18. fmt OK, clippy OK, test 145/145.
