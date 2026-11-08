@@ -271,6 +271,21 @@ mod tests {
         }
     }
 
+    /// Le statut de chaque outil dans le registre est celui annoncé dans PLAN.md.
+    #[test]
+    fn statuts_conformes_au_plan() {
+        let plan = include_str!("../../../PLAN.md");
+        for t in all() {
+            let row = plan
+                .lines()
+                .find(|l| l.starts_with(&format!("| {} |", t.id)))
+                .unwrap_or_else(|| panic!("ligne absente du PLAN : {}", t.id));
+            let cell = row.trim_end_matches('|').rsplit('|').next().unwrap();
+            let expected = format!("P{}", t.status.number());
+            assert_eq!(cell.trim().trim_matches('*'), expected, "{}", t.id);
+        }
+    }
+
     #[test]
     fn options_par_defaut_valides() {
         for t in all() {
@@ -291,6 +306,6 @@ mod tests {
     fn catalogue_serialisable() {
         let json = serde_json::to_string(&catalog()).unwrap();
         assert!(json.contains("\"pdf-fusionner\""));
-        assert!(json.contains("\"status\":\"phase"));
+        assert!(json.contains("\"status\":\"phase1\""));
     }
 }

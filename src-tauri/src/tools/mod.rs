@@ -4,6 +4,7 @@
 pub mod archives;
 pub mod images;
 pub mod pdf;
+pub mod utilitaires;
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,7 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-fusionner", pdf::merge),
     ("images-convertir", images::convert),
     ("archives-creer-zip", archives::create_zip),
+    ("utilitaires-empreinte-sha256", utilitaires::hash_files),
 ];
 
 pub fn implementation(id: &str) -> Option<ToolFn> {
