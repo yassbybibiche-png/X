@@ -19,3 +19,6 @@ src-tauri/binaries/*
 Thumbs.db
 *.swp
 .claude/
+
+# Brouillons locaux (téléchargements de validation), jamais commités
+.scratch/

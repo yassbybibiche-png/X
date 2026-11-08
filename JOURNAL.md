@@ -60,3 +60,38 @@ n'en dépendent pas (ils utilisent des répertoires et exécutables factices).
   THIRD_PARTY.md, README grand public, audit externe et corrections.
 - Limites connues de `pdf-fusionner` : signets, formulaires et étiquettes de
   page des sources non repris.
+
+## 2026-11-08 — Phase 2 : reprise après interruption
+
+La session précédente a été tuée (redémarrage de la VM) sans commit. État trouvé
+à la reprise (`git status`, `git diff --stat`, lecture de chaque fichier) :
+
+### Déjà fait (non commité, récupéré tel quel puis complété)
+- `scripts/deps.lock.json` (schéma 1) : URL + SHA-256 + taille épinglés par
+  plateforme pour 7-Zip 26.06, Ghostscript 10.08.0 (Windows seulement), Tesseract
+  5.4.0 + `fra` (Windows seulement), ffmpeg/ffprobe 6.1.1 statiques, ImageMagick
+  7.1.2-35 (Linux AppImage, Windows portable), pandoc 3.13, typst 0.15.1,
+  yt-dlp 2026.10.26 ; entrées `unavailable` avec raison pour les plateformes
+  sans binaire officiel portable. Types d'archive : raw, gz, zip, tar.gz,
+  tar.xz, 7z.
+- `src-tauri/src/cancel.rs` : jeton d'annulation partagé + test.
+- `src-tauri/src/extract.rs` : extraction sûre ZIP/TAR (anti zip-slip, liens
+  ignorés, jamais d'écrasement, dates restaurées, pas de setuid) + 3 tests.
+- `src-tauri/src/timeutil.rs` : fuseau local, conversion date → format DOS ZIP,
+  secondes Unix pour le champ « extended timestamp » + test.
+- `src-tauri/src/sidecar.rs` : `run_with` (annulation qui tue le fils, lecture
+  ligne à ligne de stdout/stderr, capture bornée), erreur typée
+  `SidecarError` (stderr tronqué), états Diagnostic `present / telechargeable /
+  absent`, résolution dans `<données>/bin/<id>/` via le manifeste.
+- `Cargo.toml` : dépendances ureq (rustls), tar, flate2, regex, base64, lzma-rs,
+  time, feature `time` de zip ; `tempfile` passé en dépendance normale.
+- `.gitignore` : `.scratch/` (≈ 750 Mo de téléchargements ayant servi à
+  calculer/vérifier les SHA-256 du manifeste, et paquets Ghostscript Ubuntu).
+
+### Manquait
+- `src-tauri/src/download.rs` (référencé par `sidecar.rs` → **le code ne
+  compilait pas** à la reprise), commandes Tauri `download_binary` et
+  `cancel_job`, bouton « Télécharger » du Diagnostic, déclaration des modules
+  dans `lib.rs`, ressources 7-Zip dans `tauri.conf.json`.
+- Tous les outils Phase 2, la conservation des dates dans les ZIP, les tests
+  associés, la mise à jour des statuts du registre et de PLAN.md.

@@ -7,9 +7,16 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 
-use crate::registry::{self, InputSpec, ToolDef};
-use crate::sidecar::Resolver;
+use std::ffi::OsStr;
+use std::time::Duration;
+
+use crate::cancel::CancelToken;
+use crate::registry::{self, InputSpec, Status, ToolDef};
+use crate::sidecar::{self, Binary, LineFn, Resolver, RunOptions, RunOutput};
 use crate::tools;
+
+/// Délai maximal d'un sidecar (les longues vidéos peuvent prendre des heures).
+const SIDECAR_TIMEOUT: Duration = Duration::from_secs(6 * 3600);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -19,6 +26,7 @@ pub enum EventKind {
     Warning,
     Done,
     Error,
+    Cancelled,
 }
 
 /// Événement envoyé au frontend (`job-event`).
@@ -84,23 +92,67 @@ pub struct ToolContext<'a> {
     pub input: &'a JobInput,
     pub reporter: &'a dyn Reporter,
     pub resolver: &'a Resolver,
+    pub cancel: &'a CancelToken,
+}
+
+impl ToolContext<'_> {
+    /// `Err(Cancelled)` si l'utilisateur a annulé la tâche.
+    pub fn check_cancel(&self) -> Result<()> {
+        Ok(self.cancel.check()?)
+    }
+
+    /// Chemin du binaire (sa présence a été vérifiée avant l'exécution).
+    pub fn binary(&self, binary: Binary) -> Result<PathBuf> {
+        self.resolver
+            .resolve(binary)
+            .map(|r| r.path)
+            .with_context(|| format!("{} introuvable — voir l'onglet Diagnostic.", binary.label()))
+    }
+
+    /// Lance un sidecar sans shell (annulable) ; erreur typée si code ≠ 0.
+    pub fn run_sidecar<S: AsRef<OsStr>>(
+        &self,
+        program: &Path,
+        label: &str,
+        args: &[S],
+        on_line: Option<LineFn>,
+    ) -> Result<RunOutput> {
+        let opts = RunOptions {
+            timeout: SIDECAR_TIMEOUT,
+            cancel: Some(self.cancel),
+            on_line,
+        };
+        sidecar::run_with(program, args, opts)?.check(label)
+    }
 }
 
 /// Erreur renvoyée par tout outil déclaré mais pas encore implémenté.
 pub fn not_implemented(tool: &ToolDef) -> anyhow::Error {
-    anyhow!(
-        "« {} » est déclaré mais non implémenté en phase 1 (prévu en phase {}).",
-        tool.name,
-        tool.status.number()
-    )
+    let when = match tool.status {
+        Status::Phase3 => " (prévu en phase 3)",
+        Status::Phase2 => " (prévu en phase 2)",
+        Status::Disponible => "",
+    };
+    anyhow!("« {} » n'est pas encore implémenté{when}.", tool.name)
 }
 
-/// Exécute l'outil `tool_id` de façon synchrone.
+/// Exécute l'outil `tool_id` de façon synchrone (non annulable).
 pub fn execute(
     tool_id: &str,
     input: JobInput,
     reporter: &dyn Reporter,
     resolver: &Resolver,
+) -> Result<Vec<PathBuf>> {
+    execute_with(tool_id, input, reporter, resolver, &CancelToken::default())
+}
+
+/// Exécute l'outil `tool_id` ; `cancel` permet de l'interrompre.
+pub fn execute_with(
+    tool_id: &str,
+    input: JobInput,
+    reporter: &dyn Reporter,
+    resolver: &Resolver,
+    cancel: &CancelToken,
 ) -> Result<Vec<PathBuf>> {
     let tool = registry::find(tool_id).with_context(|| format!("outil inconnu : {tool_id}"))?;
     let run = tools::implementation(tool.id).ok_or_else(|| not_implemented(tool))?;
@@ -111,6 +163,7 @@ pub fn execute(
         input: &input,
         reporter,
         resolver,
+        cancel,
     };
     run(&ctx)
 }
@@ -212,7 +265,6 @@ impl MemoryReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::registry::Status;
 
     fn run(id: &str, input: JobInput) -> Result<Vec<PathBuf>> {
         execute(id, input, &MemoryReporter::default(), &Resolver::default())
@@ -227,7 +279,7 @@ mod tests {
     fn implementations_conformes_au_statut() {
         for t in registry::all() {
             let implemented = tools::implementation(t.id).is_some();
-            assert_eq!(implemented, t.status == Status::Phase1, "{}", t.id);
+            assert_eq!(implemented, t.status == Status::Disponible, "{}", t.id);
         }
     }
 
@@ -235,14 +287,10 @@ mod tests {
     fn outils_non_implementes_erreur_explicite() {
         for t in registry::all()
             .into_iter()
-            .filter(|t| t.status != Status::Phase1)
+            .filter(|t| t.status != Status::Disponible)
         {
             let err = run(t.id, JobInput::default()).unwrap_err().to_string();
-            assert!(
-                err.contains("non implémenté en phase 1"),
-                "{} : {err}",
-                t.id
-            );
+            assert!(err.contains("pas encore implémenté"), "{} : {err}", t.id);
         }
     }
 

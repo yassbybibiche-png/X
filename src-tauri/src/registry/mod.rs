@@ -44,22 +44,25 @@ impl Category {
     }
 }
 
-/// Phase d'implémentation (voir PLAN.md §2).
+/// État d'un outil (voir PLAN.md §2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Status {
-    /// Implémenté et testé.
-    Phase1,
+    /// Implémenté et testé : exécutable.
+    Disponible,
+    /// Prévu en phase 2.
     Phase2,
+    /// Prévu en phase 3.
     Phase3,
 }
 
 impl Status {
-    pub fn number(self) -> u8 {
+    /// Cellule « statut » de la ligne de l'outil dans PLAN.md.
+    pub fn plan_cell(self) -> &'static str {
         match self {
-            Status::Phase1 => 1,
-            Status::Phase2 => 2,
-            Status::Phase3 => 3,
+            Status::Disponible => "OK",
+            Status::Phase2 => "P2",
+            Status::Phase3 => "P3",
         }
     }
 }
@@ -281,8 +284,12 @@ mod tests {
                 .find(|l| l.starts_with(&format!("| {} |", t.id)))
                 .unwrap_or_else(|| panic!("ligne absente du PLAN : {}", t.id));
             let cell = row.trim_end_matches('|').rsplit('|').next().unwrap();
-            let expected = format!("P{}", t.status.number());
-            assert_eq!(cell.trim().trim_matches('*'), expected, "{}", t.id);
+            assert_eq!(
+                cell.trim().trim_matches('*'),
+                t.status.plan_cell(),
+                "{}",
+                t.id
+            );
         }
     }
 
@@ -306,6 +313,6 @@ mod tests {
     fn catalogue_serialisable() {
         let json = serde_json::to_string(&catalog()).unwrap();
         assert!(json.contains("\"pdf-fusionner\""));
-        assert!(json.contains("\"status\":\"phase1\""));
+        assert!(json.contains("\"status\":\"disponible\""));
     }
 }

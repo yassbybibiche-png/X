@@ -24,11 +24,16 @@ anyhow = "1"
 sha2 = "0.11"
 lopdf = "0.47"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif", "ico", "tga", "qoi"] }
-zip = { version = "9", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate", "time"] }
 walkdir = "2"
-
-[dev-dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+tar = "0.4.46"
+flate2 = "1.1.11"
+regex = "1.13.1"
+base64 = "0.23.1"
 tempfile = "3"
+lzma-rs = "0.3.0"
+time = { version = "0.3", features = ["local-offset"] }
 
 [profile.release]
 codegen-units = 1

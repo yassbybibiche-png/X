@@ -33,7 +33,7 @@ pub fn matches(actual: &str, expected: &str) -> bool {
     actual.eq_ignore_ascii_case(expected.trim())
 }
 
-fn to_hex(bytes: &[u8]) -> String {
+pub fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::with_capacity(64), |mut s, b| {
         let _ = write!(s, "{b:02x}");
         s

@@ -6,14 +6,16 @@
 //! [`std::process::Command`], jamais à travers un shell.
 
 use std::ffi::{OsStr, OsString};
+use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use serde::Serialize;
+
+use crate::cancel::{CancelToken, Cancelled};
 
 /// Binaires tiers connus de l'application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -156,7 +158,7 @@ pub struct Resolved {
 /// Résout les binaires selon l'ordre bundlé → données app → PATH.
 #[derive(Debug, Clone, Default)]
 pub struct Resolver {
-    bundled_dir: Option<PathBuf>,
+    bundled_dirs: Vec<PathBuf>,
     data_dir: Option<PathBuf>,
     path_var: Option<OsString>,
 }
@@ -168,10 +170,16 @@ impl Resolver {
         path_var: Option<OsString>,
     ) -> Self {
         Self {
-            bundled_dir,
+            bundled_dirs: bundled_dir.into_iter().collect(),
             data_dir,
             path_var,
         }
+    }
+
+    /// Ajoute un dossier de binaires bundlés (ex. ressources Tauri `binaries/`).
+    pub fn with_bundled_dir(mut self, dir: PathBuf) -> Self {
+        self.bundled_dirs.push(dir);
+        self
     }
 
     /// Résolveur de production : dossier de l'exécutable + `data_dir` + PATH.
@@ -182,25 +190,41 @@ impl Resolver {
         Self::new(bundled, data_dir, std::env::var_os("PATH"))
     }
 
+    /// Dossier `<données app>/bin` (cible des téléchargements).
+    pub fn data_dir(&self) -> Option<&Path> {
+        self.data_dir.as_deref()
+    }
+
     pub fn resolve(&self, binary: Binary) -> Option<Resolved> {
         let names = binary.candidates();
-        let dirs = [
-            (self.bundled_dir.as_deref(), Source::Bundled),
-            (self.data_dir.as_deref(), Source::AppData),
-        ];
-        for (dir, source) in dirs {
-            if let Some(path) = dir.and_then(|d| find_in_dir(d, names)) {
-                return Some(Resolved { path, source });
-            }
-        }
-        let path_var = self.path_var.as_deref()?;
-        std::env::split_paths(path_var)
-            .find_map(|d| find_in_dir(&d, names))
-            .map(|path| Resolved {
-                path,
-                source: Source::SystemPath,
-            })
+        let bundled = self
+            .bundled_dirs
+            .iter()
+            .find_map(|d| find_in_dir(d, names))
+            .map(|path| (path, Source::Bundled));
+        bundled
+            .or_else(|| self.in_data_dir(binary).map(|p| (p, Source::AppData)))
+            .or_else(|| self.in_path(names).map(|p| (p, Source::SystemPath)))
+            .map(|(path, source)| Resolved { path, source })
     }
+
+    /// Dossier données : `<bin>/<nom>` (dépôt manuel) ou installation du manifeste.
+    fn in_data_dir(&self, binary: Binary) -> Option<PathBuf> {
+        let dir = self.data_dir.as_deref()?;
+        find_in_dir(dir, binary.candidates()).or_else(|| {
+            crate::download::installed_exe(dir, binary).filter(|p| is_executable(p))
+        })
+    }
+
+    fn in_path(&self, names: &[&str]) -> Option<PathBuf> {
+        let path_var = self.path_var.as_deref()?;
+        std::env::split_paths(path_var).find_map(|d| find_in_dir(&d, names))
+    }
+}
+
+/// Exécutable voisin d'un binaire résolu (ex. `ffprobe` à côté de `ffmpeg`).
+pub fn sibling(path: &Path, name: &str) -> Option<PathBuf> {
+    find_in_dir(path.parent()?, &[name])
 }
 
 fn find_in_dir(dir: &Path, names: &[&str]) -> Option<PathBuf> {
@@ -211,7 +235,7 @@ fn find_in_dir(dir: &Path, names: &[&str]) -> Option<PathBuf> {
 }
 
 #[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
+pub fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()
         .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
@@ -219,8 +243,53 @@ fn is_executable(path: &Path) -> bool {
 }
 
 #[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
+pub fn is_executable(path: &Path) -> bool {
     path.is_file()
+}
+
+/// Erreurs typées d'exécution d'un sidecar (stderr tronqué).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SidecarError {
+    Spawn { program: String, message: String },
+    Timeout { program: String, seconds: u64 },
+    Failed { label: String, status: String, stderr: String },
+}
+
+impl fmt::Display for SidecarError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Spawn { program, message } => {
+                write!(f, "impossible de lancer {program} : {message}")
+            }
+            Self::Timeout { program, seconds } => {
+                write!(f, "{program} interrompu : délai de {seconds} s dépassé")
+            }
+            Self::Failed {
+                label,
+                status,
+                stderr,
+            } => write!(f, "{label} a échoué ({status}) : {stderr}"),
+        }
+    }
+}
+
+impl std::error::Error for SidecarError {}
+
+/// Taille maximale de stderr reprise dans un message d'erreur.
+const STDERR_MAX_CHARS: usize = 1200;
+/// Sortie conservée en mémoire par flux (au-delà, seule la fin est gardée).
+const CAPTURE_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+/// Dernières lignes non vides de `text`, limitées à [`STDERR_MAX_CHARS`].
+pub fn truncate_stderr(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let tail = lines[lines.len().saturating_sub(8)..].join("\n");
+    let count = tail.chars().count();
+    if count <= STDERR_MAX_CHARS {
+        return tail;
+    }
+    let kept: String = tail.chars().skip(count - STDERR_MAX_CHARS).collect();
+    format!("…{kept}")
 }
 
 /// Résultat d'une exécution.
@@ -232,39 +301,91 @@ pub struct RunOutput {
 }
 
 impl RunOutput {
-    /// Erreur explicite si le code de retour n'est pas 0.
+    /// Erreur typée ([`SidecarError::Failed`]) si le code de retour n'est pas 0.
     pub fn check(self, label: &str) -> Result<Self> {
         if self.status.success() {
             return Ok(self);
         }
-        let tail: String = last_lines(&self.stderr, 8);
-        bail!("{label} a échoué ({}) : {tail}", self.status)
+        Err(SidecarError::Failed {
+            label: label.to_string(),
+            status: self.status.to_string(),
+            stderr: truncate_stderr(&self.stderr),
+        }
+        .into())
     }
 }
 
-fn last_lines(text: &str, n: usize) -> String {
-    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-    lines[lines.len().saturating_sub(n)..].join("\n")
+/// Flux de sortie d'un processus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// Rappel appelé pour chaque ligne (séparateurs `\n` et `\r`).
+pub type LineFn<'a> = &'a (dyn Fn(Stream, &str) + Sync);
+
+/// Options d'exécution : délai, annulation, lecture ligne à ligne.
+#[derive(Clone, Copy)]
+pub struct RunOptions<'a> {
+    pub timeout: Duration,
+    pub cancel: Option<&'a CancelToken>,
+    pub on_line: Option<LineFn<'a>>,
+}
+
+impl RunOptions<'_> {
+    pub fn timeout(timeout: Duration) -> Self {
+        Self {
+            timeout,
+            cancel: None,
+            on_line: None,
+        }
+    }
 }
 
 /// Lance `program` avec `args` (sans shell), avec un délai maximal.
 pub fn run<S: AsRef<OsStr>>(program: &Path, args: &[S], timeout: Duration) -> Result<RunOutput> {
+    run_with(program, args, RunOptions::timeout(timeout))
+}
+
+/// Lance `program` (sans shell) ; tue le processus si le délai expire ou si la
+/// tâche est annulée ; transmet chaque ligne de sortie à `on_line`.
+pub fn run_with<S: AsRef<OsStr>>(
+    program: &Path,
+    args: &[S],
+    opts: RunOptions,
+) -> Result<RunOutput> {
+    let mut child = spawn(program, args)?;
+    let out_pipe = child.stdout.take();
+    let err_pipe = child.stderr.take();
+    std::thread::scope(|s| {
+        let on_line = opts.on_line;
+        let out = s.spawn(move || read_stream(out_pipe, Stream::Stdout, on_line));
+        let err = s.spawn(move || read_stream(err_pipe, Stream::Stderr, on_line));
+        let status = wait(&mut child, program, &opts);
+        let stdout = out.join().unwrap_or_default();
+        let stderr = err.join().unwrap_or_default();
+        Ok(RunOutput {
+            status: status?,
+            stdout,
+            stderr,
+        })
+    })
+}
+
+fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S]) -> Result<Child> {
     let mut cmd = Command::new(program);
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     hide_console(&mut cmd);
-    let mut child = cmd
-        .spawn()
-        .with_context(|| format!("impossible de lancer {}", program.display()))?;
-    let out = spawn_reader(child.stdout.take());
-    let err = spawn_reader(child.stderr.take());
-    let status = wait_with_timeout(&mut child, timeout, program)?;
-    Ok(RunOutput {
-        status,
-        stdout: join_reader(out),
-        stderr: join_reader(err),
+    cmd.spawn().map_err(|e| {
+        SidecarError::Spawn {
+            program: program.display().to_string(),
+            message: e.to_string(),
+        }
+        .into()
     })
 }
 
@@ -278,37 +399,77 @@ fn hide_console(cmd: &mut Command) {
 #[cfg(not(windows))]
 fn hide_console(_cmd: &mut Command) {}
 
-fn spawn_reader<R: Read + Send + 'static>(pipe: Option<R>) -> Option<JoinHandle<String>> {
-    pipe.map(|mut p| {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            let _ = p.read_to_end(&mut buf);
-            String::from_utf8_lossy(&buf).into_owned()
-        })
-    })
+fn read_stream<R: Read>(pipe: Option<R>, stream: Stream, on_line: Option<LineFn>) -> String {
+    let Some(mut pipe) = pipe else {
+        return String::new();
+    };
+    let mut captured = Vec::new();
+    let mut pending = Vec::new();
+    let mut buf = [0u8; 8192];
+    while let Ok(n) = pipe.read(&mut buf) {
+        if n == 0 {
+            break;
+        }
+        keep_tail(&mut captured, &buf[..n]);
+        if let Some(f) = on_line {
+            split_lines(&mut pending, &buf[..n], |l| f(stream, l));
+        }
+    }
+    if let Some(f) = on_line {
+        split_lines(&mut pending, b"\n", |l| f(stream, l));
+    }
+    String::from_utf8_lossy(&captured).into_owned()
 }
 
-fn join_reader(handle: Option<JoinHandle<String>>) -> String {
-    handle.and_then(|h| h.join().ok()).unwrap_or_default()
+fn keep_tail(captured: &mut Vec<u8>, chunk: &[u8]) {
+    captured.extend_from_slice(chunk);
+    if captured.len() > CAPTURE_MAX_BYTES {
+        let excess = captured.len() - CAPTURE_MAX_BYTES;
+        captured.drain(..excess);
+    }
 }
 
-fn wait_with_timeout(child: &mut Child, timeout: Duration, program: &Path) -> Result<ExitStatus> {
+/// Découpe en lignes (`\n`, `\r`), en ignorant les retours arrière (`\x08`).
+fn split_lines(pending: &mut Vec<u8>, chunk: &[u8], mut emit: impl FnMut(&str)) {
+    for &b in chunk {
+        match b {
+            b'\n' | b'\r' => {
+                if !pending.is_empty() {
+                    emit(&String::from_utf8_lossy(pending));
+                    pending.clear();
+                }
+            }
+            0x08 => {}
+            _ => pending.push(b),
+        }
+    }
+}
+
+fn wait(child: &mut Child, program: &Path, opts: &RunOptions) -> Result<ExitStatus> {
     let start = Instant::now();
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(status);
         }
-        if start.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            bail!(
-                "{} interrompu : délai de {} s dépassé",
-                program.display(),
-                timeout.as_secs()
-            );
+        if opts.cancel.is_some_and(CancelToken::is_cancelled) {
+            kill(child);
+            return Err(Cancelled.into());
+        }
+        if start.elapsed() >= opts.timeout {
+            kill(child);
+            return Err(SidecarError::Timeout {
+                program: program.display().to_string(),
+                seconds: opts.timeout.as_secs(),
+            }
+            .into());
         }
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+fn kill(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Première ligne non vide de la sortie « version » du binaire.
@@ -322,6 +483,18 @@ pub fn version(binary: Binary, path: &Path) -> Option<String> {
         .map(|l| l.chars().take(120).collect())
 }
 
+/// Disponibilité d'un binaire pour l'écran Diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum State {
+    /// Trouvé (bundlé, données app ou PATH).
+    Present,
+    /// Absent mais téléchargeable depuis le manifeste épinglé.
+    Telechargeable,
+    /// Absent et non téléchargeable sur cette plateforme (raison fournie).
+    Absent,
+}
+
 /// État d'un binaire pour l'écran Diagnostic.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -331,23 +504,40 @@ pub struct BinaryStatus {
     pub license: &'static str,
     pub delivery: Delivery,
     pub present: bool,
+    pub state: State,
     pub source: Option<Source>,
     pub path: Option<String>,
     pub version: Option<String>,
+    /// Version épinglée dans `deps.lock.json` (si téléchargeable).
+    pub pinned_version: Option<String>,
+    /// Taille totale à télécharger, en octets.
+    pub download_size: Option<u64>,
+    /// Raison pour laquelle le binaire n'est pas téléchargeable ici.
+    pub unavailable_reason: Option<String>,
 }
 
 pub fn status(resolver: &Resolver, binary: Binary) -> BinaryStatus {
     let resolved = resolver.resolve(binary);
     let version = resolved.as_ref().and_then(|r| version(binary, &r.path));
+    let offer = crate::download::offer(binary);
+    let state = match (&resolved, &offer) {
+        (Some(_), _) => State::Present,
+        (None, Ok(_)) => State::Telechargeable,
+        (None, Err(_)) => State::Absent,
+    };
     BinaryStatus {
         id: binary.id(),
         label: binary.label(),
         license: binary.license(),
         delivery: binary.delivery(),
         present: resolved.is_some(),
+        state,
         source: resolved.as_ref().map(|r| r.source),
         path: resolved.map(|r| r.path.display().to_string()),
         version,
+        pinned_version: offer.as_ref().ok().map(|o| o.version.clone()),
+        download_size: offer.as_ref().ok().map(|o| o.size),
+        unavailable_reason: offer.err(),
     }
 }
 
@@ -490,6 +680,60 @@ mod tests {
     fn code_retour_non_nul_signale() {
         let out = run(Path::new("false"), &[] as &[&str], Duration::from_secs(5)).unwrap();
         assert!(out.check("false").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn annulation_tue_le_processus() {
+        let token = CancelToken::default();
+        let t2 = token.clone();
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            t2.cancel();
+        });
+        let start = Instant::now();
+        let opts = RunOptions {
+            cancel: Some(&token),
+            ..RunOptions::timeout(Duration::from_secs(30))
+        };
+        let err = run_with(Path::new("sleep"), &["10"], opts).unwrap_err();
+        canceller.join().unwrap();
+        assert!(crate::cancel::is_cancelled(&err));
+        assert!(start.elapsed() < Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lignes_transmises_au_fil_de_l_eau() {
+        let lines = std::sync::Mutex::new(Vec::new());
+        let on_line = |s: Stream, l: &str| lines.lock().unwrap().push((s, l.to_string()));
+        let opts = RunOptions {
+            on_line: Some(&on_line),
+            ..RunOptions::timeout(Duration::from_secs(5))
+        };
+        run_with(Path::new("printf"), &["a\\rb\\nc"], opts).unwrap();
+        let got: Vec<String> = lines.lock().unwrap().iter().map(|(_, l)| l.clone()).collect();
+        assert_eq!(got, ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn stderr_tronque() {
+        let long: String = (0..50).map(|i| format!("ligne {i}\n")).collect();
+        let t = truncate_stderr(&long);
+        assert!(t.starts_with("ligne 42") && t.ends_with("ligne 49"), "{t}");
+        let huge = "x".repeat(5000);
+        assert_eq!(truncate_stderr(&huge).chars().count(), STDERR_MAX_CHARS + 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn echec_erreur_typee() {
+        let out = run(Path::new("ls"), &["/nexiste/pas"], Duration::from_secs(5)).unwrap();
+        let err = out.check("ls").unwrap_err();
+        let typed = err.downcast_ref::<SidecarError>().unwrap();
+        assert!(matches!(typed, SidecarError::Failed { label, .. } if label == "ls"));
+        let err = run(Path::new("/nexiste/pas"), &[] as &[&str], Duration::from_secs(5)).unwrap_err();
+        assert!(matches!(err.downcast_ref::<SidecarError>(), Some(SidecarError::Spawn { .. })));
     }
 
     #[test]
