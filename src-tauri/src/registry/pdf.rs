@@ -31,7 +31,7 @@ pub const TOOLS: &[ToolDef] = &[
             ..files(PDF)
         },
         output: "<premier>-fusionne.pdf",
-        status: Status::Disponible,
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {

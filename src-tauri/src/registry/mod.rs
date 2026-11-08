@@ -48,8 +48,8 @@ impl Category {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Status {
-    /// Implémenté et testé : exécutable.
-    Disponible,
+    /// Implémenté et testé : exécutable (quelle que soit la phase de livraison).
+    Phase1,
     /// Prévu en phase 2.
     Phase2,
     /// Prévu en phase 3.
@@ -60,7 +60,7 @@ impl Status {
     /// Cellule « statut » de la ligne de l'outil dans PLAN.md.
     pub fn plan_cell(self) -> &'static str {
         match self {
-            Status::Disponible => "OK",
+            Status::Phase1 => "P1",
             Status::Phase2 => "P2",
             Status::Phase3 => "P3",
         }
@@ -313,6 +313,6 @@ mod tests {
     fn catalogue_serialisable() {
         let json = serde_json::to_string(&catalog()).unwrap();
         assert!(json.contains("\"pdf-fusionner\""));
-        assert!(json.contains("\"status\":\"disponible\""));
+        assert!(json.contains("\"status\":\"phase1\""));
     }
 }

@@ -49,7 +49,7 @@ pub const TOOLS: &[ToolDef] = &[
             },
             default: "normale",
         }],
-        status: Status::Disponible,
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {

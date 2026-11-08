@@ -131,7 +131,7 @@ pub fn not_implemented(tool: &ToolDef) -> anyhow::Error {
     let when = match tool.status {
         Status::Phase3 => " (prévu en phase 3)",
         Status::Phase2 => " (prévu en phase 2)",
-        Status::Disponible => "",
+        Status::Phase1 => "",
     };
     anyhow!("« {} » n'est pas encore implémenté{when}.", tool.name)
 }
@@ -279,7 +279,7 @@ mod tests {
     fn implementations_conformes_au_statut() {
         for t in registry::all() {
             let implemented = tools::implementation(t.id).is_some();
-            assert_eq!(implemented, t.status == Status::Disponible, "{}", t.id);
+            assert_eq!(implemented, t.status == Status::Phase1, "{}", t.id);
         }
     }
 
@@ -287,7 +287,7 @@ mod tests {
     fn outils_non_implementes_erreur_explicite() {
         for t in registry::all()
             .into_iter()
-            .filter(|t| t.status != Status::Disponible)
+            .filter(|t| t.status != Status::Phase1)
         {
             let err = run(t.id, JobInput::default()).unwrap_err().to_string();
             assert!(err.contains("pas encore implémenté"), "{} : {err}", t.id);

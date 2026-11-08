@@ -10,7 +10,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Calcule l'empreinte SHA-256 de fichiers (format compatible sha256sum).",
         input: files(&[]),
         output: "<nom.ext>.sha256",
-        status: Status::Disponible,
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {

@@ -111,7 +111,8 @@ depuis le webview.
 
 ## 2. Liste des outils (80)
 
-Statut : **P1** = implémenté et testé en phase 1 ; **P2** = phase 2 (outils purs
+Statut : **P1** = implémenté, testé et exécutable (quelle que soit la phase où
+il a été livré ; `Status::Phase1` dans le registre) ; **P2** = phase 2 (outils purs
 Rust + sidecars simples) ; **P3** = phase 3 (IA, OCR, téléchargement, cas
 complexes). Binaire « — » = pur Rust, aucun sidecar.
 

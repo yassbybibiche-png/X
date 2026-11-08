@@ -95,3 +95,11 @@ La session précédente a été tuée (redémarrage de la VM) sans commit. État
   dans `lib.rs`, ressources 7-Zip dans `tauri.conf.json`.
 - Tous les outils Phase 2, la conservation des dates dans les ZIP, les tests
   associés, la mise à jour des statuts du registre et de PLAN.md.
+
+## 2026-11-08 — Phase 2b
+
+Progression (une ligne par groupe) :
+- Groupe 0 (remise en vert) : convention de statut unique `Status::Phase1` ↔
+  « P1 » dans PLAN.md (= implémenté, testé, exécutable) ; corrige aussi le
+  frontend qui attendait déjà `"phase1"` (le backend envoyait `"disponible"` →
+  tous les outils auraient été grisés). fmt OK, clippy OK, `cargo test` 73/73.
