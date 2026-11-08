@@ -204,13 +204,13 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
 | archives-creer-zip | — (crate zip) | fichiers/dossiers → .zip | **P1** |
-| archives-extraire-zip | — (crate zip) | .zip → dossier `<nom>/` (anti zip-slip) | P2 |
+| archives-extraire-zip | — (crate zip) | .zip → dossier `<nom>/` (anti zip-slip) | **P1** |
 | archives-creer-7z | 7zip | fichiers/dossiers → .7z | P2 |
 | archives-extraire-7z | 7zip | .7z/.rar/.iso/… → dossier | P2 |
-| archives-creer-tar | — (crate tar) | fichiers/dossiers → .tar | P2 |
-| archives-creer-targz | — (tar + flate2) | fichiers/dossiers → .tar.gz | P2 |
-| archives-extraire-tar | — (tar + flate2) | .tar/.tar.gz → dossier | P2 |
-| archives-lister | — (zip/tar) ; 7zip pour les autres | archive → `-contenu.txt` | P2 |
+| archives-creer-tar | — (crate tar) | fichiers/dossiers → .tar | **P1** |
+| archives-creer-targz | — (tar + flate2) | fichiers/dossiers → .tar.gz | **P1** |
+| archives-extraire-tar | — (tar + flate2) | .tar/.tar.gz → dossier | **P1** |
+| archives-lister | — (zip/tar) ; 7zip pour les autres formats (P2) | .zip/.tar/.tar.gz → `-contenu.txt` | **P1** |
 | archives-tester | 7zip | archive → rapport d'intégrité | P2 |
 
 ### Utilitaires (4)

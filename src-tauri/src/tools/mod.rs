@@ -2,6 +2,7 @@
 //! fonctionnent ; les autres renvoient l'erreur « pas encore implémenté ».
 
 pub mod archives;
+pub mod archives_extract;
 pub mod images;
 pub mod images_edit;
 pub mod pdf;
@@ -37,6 +38,11 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("images-rogner", images_edit::crop),
     ("images-niveaux-de-gris", images_edit::grayscale),
     ("archives-creer-zip", archives::create_zip),
+    ("archives-extraire-zip", archives_extract::extract_zip),
+    ("archives-creer-tar", archives::create_tar),
+    ("archives-creer-targz", archives::create_targz),
+    ("archives-extraire-tar", archives_extract::extract_tar),
+    ("archives-lister", archives_extract::list),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
 ];
 

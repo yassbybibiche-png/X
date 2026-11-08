@@ -59,6 +59,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Extrait une archive .zip dans un nouveau dossier (protection anti « zip slip »).",
         input: files(&["zip"]),
         output: "dossier <nom>/",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -88,6 +89,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Regroupe des fichiers dans une archive .tar (sans compression).",
         input: ANY,
         output: "<nom>.tar",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -97,6 +99,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Regroupe et compresse dans une archive .tar.gz.",
         input: ANY,
         output: "<nom>.tar.gz",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -106,16 +109,17 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Extrait une archive .tar ou .tar.gz dans un nouveau dossier.",
         input: files(&["tar", "gz", "tgz"]),
         output: "dossier <nom>/",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
         id: "archives-lister",
         category: C,
         name: "Lister le contenu",
-        description: "Écrit la liste des fichiers d'une archive (noms, tailles) dans un .txt.",
-        binaries: SEVEN,
-        input: files(ARCHIVE_EXT),
+        description: "Écrit la liste des fichiers d'une archive ZIP, TAR ou TAR.GZ (noms, tailles) dans un .txt.",
+        input: files(&["zip", "tar", "gz", "tgz"]),
         output: "<nom>-contenu.txt",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {

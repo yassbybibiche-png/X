@@ -117,3 +117,10 @@ Progression (une ligne par groupe) :
   `images-niveaux-de-gris`. Orientation EXIF appliquée à la lecture. La
   conversion en lot était déjà couverte par `images-convertir` (multi-fichiers,
   test `lot_avec_un_fichier_invalide`). fmt OK, clippy OK, test 96/96.
+- Groupe Archives : `archives-extraire-zip`, `archives-creer-tar`,
+  `archives-creer-targz`, `archives-extraire-tar` (gzip détecté au contenu),
+  `archives-lister` (zip/tar/tar.gz en pur Rust, 7-Zip n'est plus requis).
+  Extraction via `extract.rs` dans un dossier réservé atomiquement
+  (`output::reserve_dir`, `<nom>-2/` si besoin, supprimé en cas d'échec ou
+  d'annulation). Dates de modification désormais conservées dans les ZIP créés.
+  fmt OK, clippy OK, test 104/104.

@@ -1,4 +1,4 @@
-//! Outils archives en pur Rust.
+//! Création d'archives en pur Rust (ZIP, TAR, TAR.GZ).
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -6,12 +6,14 @@ use std::io::{BufWriter, Write};
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
 use crate::jobs::ToolContext;
-use crate::output;
+use crate::{output, timeutil};
 
 /// Seuil au-delà duquel une entrée ZIP64 est nécessaire.
 const ZIP64_THRESHOLD: u64 = u32::MAX as u64;
@@ -43,7 +45,7 @@ fn zip_options(level: &str) -> Result<SimpleFileOptions> {
 pub fn create_zip(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
     let inputs = &ctx.input.inputs;
     let options = zip_options(ctx.input.option("compression"))?;
-    let mut out = reserve_zip(inputs)?;
+    let mut out = reserve_archive(inputs, "zip")?;
     ctx.reporter.progress(0.0, "Inventaire des fichiers…");
     let entries = collect_entries(inputs, out.path(), ctx)?;
     let file = out.take_file()?;
@@ -53,13 +55,66 @@ pub fn create_zip(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
     Ok(vec![out.commit()])
 }
 
-/// Un seul élément → `<nom>.zip` ; plusieurs → `archive.zip` (dossier du premier).
-fn reserve_zip(inputs: &[PathBuf]) -> Result<output::OutputFile> {
+/// Un seul élément → `<nom>.<ext>` ; plusieurs → `archive.<ext>` (dossier du premier).
+fn reserve_archive(inputs: &[PathBuf], ext: &str) -> Result<output::OutputFile> {
     match inputs {
-        [single] => output::beside(single, None, "zip"),
-        [first, ..] => output::reserve(&output::parent_dir(first), "archive", "zip"),
+        [single] => output::beside(single, None, ext),
+        [first, ..] => output::reserve(&output::parent_dir(first), "archive", ext),
         [] => bail!("aucun fichier à archiver"),
     }
+}
+
+/// `archives-creer-tar`.
+pub fn create_tar(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
+    tar_job(ctx, "tar", |file, entries, ctx| {
+        let writer = write_tar(BufWriter::new(file), entries, ctx)?;
+        writer.into_inner().map_err(|e| e.into_error())?;
+        Ok(())
+    })
+}
+
+/// `archives-creer-targz`.
+pub fn create_targz(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
+    tar_job(ctx, "tar.gz", |file, entries, ctx| {
+        let gz = GzEncoder::new(BufWriter::new(file), Compression::default());
+        let gz = write_tar(gz, entries, ctx)?;
+        gz.finish()?.flush()?;
+        Ok(())
+    })
+}
+
+type TarWrite = fn(File, &[Entry], &ToolContext) -> Result<()>;
+
+fn tar_job(ctx: &ToolContext, ext: &str, write: TarWrite) -> Result<Vec<PathBuf>> {
+    let inputs = &ctx.input.inputs;
+    let mut out = reserve_archive(inputs, ext)?;
+    ctx.reporter.progress(0.0, "Inventaire des fichiers…");
+    let entries = collect_entries(inputs, out.path(), ctx)?;
+    write(out.take_file()?, &entries, ctx)?;
+    let files = entries.iter().filter(|e| !e.is_dir).count();
+    ctx.reporter.progress(100.0, "Archive terminée");
+    ctx.reporter.log(&format!("{files} fichier(s) archivé(s)"));
+    Ok(vec![out.commit()])
+}
+
+/// Écrit les entrées (dates et droits rwx conservés, liens déjà exclus).
+fn write_tar<W: Write>(writer: W, entries: &[Entry], ctx: &ToolContext) -> Result<W> {
+    let mut tar = tar::Builder::new(writer);
+    tar.follow_symlinks(false);
+    for (i, entry) in entries.iter().enumerate() {
+        ctx.check_cancel()?;
+        let percent = 5.0 + i as f32 * 90.0 / entries.len().max(1) as f32;
+        ctx.reporter
+            .progress(percent, &format!("Ajout de {}", entry.name));
+        if entry.is_dir {
+            tar.append_dir(&entry.name, &entry.source)
+        } else {
+            tar.append_path_with_name(&entry.source, &entry.name)
+        }
+        .with_context(|| format!("ajout de {}", entry.name))?;
+    }
+    tar.into_inner()
+        .context("finalisation de l'archive impossible")
 }
 
 /// Nom dans l'archive : composants relatifs joints par `/` (jamais absolu, jamais `..`).
@@ -152,11 +207,13 @@ fn add_entry<W: Write + std::io::Seek>(
     }
     let mut source = File::open(&entry.source)
         .with_context(|| format!("lecture de {}", entry.source.display()))?;
-    let size = source.metadata()?.len();
-    zip.start_file(
-        entry.name.as_str(),
-        options.large_file(size >= ZIP64_THRESHOLD),
-    )?;
+    let meta = source.metadata()?;
+    let mut options = options.large_file(meta.len() >= ZIP64_THRESHOLD);
+    // Date de modification conservée (format DOS, heure locale, précision 2 s).
+    if let Some(dt) = meta.modified().ok().and_then(timeutil::zip_datetime) {
+        options = options.last_modified_time(dt);
+    }
+    zip.start_file(entry.name.as_str(), options)?;
     std::io::copy(&mut source, zip).with_context(|| format!("compression de {}", entry.name))?;
     Ok(())
 }

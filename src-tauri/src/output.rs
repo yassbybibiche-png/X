@@ -122,6 +122,59 @@ pub fn reserve(dir: &Path, base: &str, ext: &str) -> Result<OutputFile> {
     )
 }
 
+/// Dossier de sortie réservé (créé vide par `create_dir`, atomique). En cas
+/// d'échec, il est supprimé avec son contenu (uniquement ce que l'outil y a écrit).
+#[derive(Debug)]
+pub struct OutputDir {
+    path: PathBuf,
+    committed: bool,
+}
+
+impl OutputDir {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn commit(mut self) -> PathBuf {
+        self.committed = true;
+        self.path.clone()
+    }
+}
+
+impl Drop for OutputDir {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+/// Réserve le premier dossier libre `base[-n]` dans `dir` (jamais un dossier existant).
+pub fn reserve_dir(dir: &Path, base: &str) -> Result<OutputDir> {
+    if base.contains(['/', '\\']) || base == ".." || base.is_empty() {
+        bail!("nom de dossier de sortie invalide : {base}");
+    }
+    for n in 1..=MAX_ATTEMPTS {
+        let path = dir.join(candidate(base, "", n));
+        match std::fs::create_dir(&path) {
+            Ok(()) => {
+                return Ok(OutputDir {
+                    path,
+                    committed: false,
+                });
+            }
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(e).with_context(|| format!("impossible de créer {}", path.display()));
+            }
+        }
+    }
+    bail!(
+        "aucun nom de dossier libre pour {base} dans {}",
+        dir.display()
+    )
+}
+
 /// Réserve une sortie à côté de `input` : `<stem>-<suffix>.<ext>`.
 pub fn beside(input: &Path, suffix: Option<&str>, ext: &str) -> Result<OutputFile> {
     reserve(&parent_dir(input), &with_suffix(&stem(input), suffix), ext)
@@ -202,6 +255,20 @@ mod tests {
         let dir = tmp.path().join("Vacances.2024");
         fs::create_dir(&dir).unwrap();
         assert_eq!(stem(&dir), "Vacances.2024");
+    }
+
+    #[test]
+    fn dossier_reserve_sans_ecrasement_et_nettoye() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("photos")).unwrap();
+        fs::write(tmp.path().join("photos").join("garde.txt"), b"x").unwrap();
+        let d = reserve_dir(tmp.path(), "photos").unwrap();
+        assert_eq!(d.path(), tmp.path().join("photos-2"));
+        fs::write(d.path().join("partiel"), b"y").unwrap();
+        drop(d);
+        assert!(!tmp.path().join("photos-2").exists());
+        assert!(tmp.path().join("photos").join("garde.txt").exists());
+        assert!(reserve_dir(tmp.path(), "..").is_err());
     }
 
     #[test]
