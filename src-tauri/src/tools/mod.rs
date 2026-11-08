@@ -1,6 +1,7 @@
 //! Implémentations des outils. Seuls les outils listés dans [`implementation`]
 //! fonctionnent ; les autres renvoient l'erreur « non implémenté en phase 1 ».
 
+pub mod archives;
 pub mod images;
 pub mod pdf;
 
@@ -17,6 +18,7 @@ pub type ToolFn = fn(&ToolContext) -> Result<Vec<PathBuf>>;
 const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-fusionner", pdf::merge),
     ("images-convertir", images::convert),
+    ("archives-creer-zip", archives::create_zip),
 ];
 
 pub fn implementation(id: &str) -> Option<ToolFn> {
