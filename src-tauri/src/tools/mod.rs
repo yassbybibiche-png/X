@@ -1,6 +1,7 @@
 //! Implémentations des outils. Seuls les outils listés dans [`implementation`]
 //! fonctionnent ; les autres renvoient l'erreur « non implémenté en phase 1 ».
 
+pub mod images;
 pub mod pdf;
 
 use std::path::{Path, PathBuf};
@@ -13,7 +14,10 @@ use crate::output;
 pub type ToolFn = fn(&ToolContext) -> Result<Vec<PathBuf>>;
 
 /// Outils réellement implémentés (id → fonction).
-const IMPLEMENTED: &[(&str, ToolFn)] = &[("pdf-fusionner", pdf::merge)];
+const IMPLEMENTED: &[(&str, ToolFn)] = &[
+    ("pdf-fusionner", pdf::merge),
+    ("images-convertir", images::convert),
+];
 
 pub fn implementation(id: &str) -> Option<ToolFn> {
     IMPLEMENTED.iter().find(|(k, _)| *k == id).map(|(_, f)| *f)

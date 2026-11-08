@@ -96,7 +96,7 @@ pub const TOOLS: &[ToolDef] = &[
             },
             QUALITY,
         ],
-        status: Status::Phase2,
+        status: Status::Phase1,
         ..BASE
     },
     simple(
