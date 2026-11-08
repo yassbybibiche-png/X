@@ -446,3 +446,37 @@ Détail : AUDIT.md §3.
    construit les 4 installeurs, les joint et publie la release.
 3. Vérifier la page Releases : `…_windows-x64.msi`, `…_macos-x64.dmg`,
    `…_macos-arm64.dmg`, `…_linux-x64.AppImage`.
+
+## 2026-11-08 — Publication — phase préparatoire
+
+Premier passage en **lecture seule** : la session non interactive refusait
+`cargo`, l'écriture de fichiers et `dpkg`. L'audit n'a rien trouvé de bloquant
+hors macOS arm64. Ghostscript (AGPL) n'est dans aucun installeur : seul 7-Zip
+est empaqueté. Les licences de Real-ESRGAN, yt-dlp et `fra.traineddata` ne sont
+pas vérifiables hors ligne, donc la mention « amont » de THIRD_PARTY.md reste.
+Le second passage applique les corrections (un commit chacune) :
+
+1. `tauri.conf.json` : `bundle.macOS.signingIdentity = "-"` (signature ad hoc).
+   Sans signature, une app téléchargée sur Apple Silicon est souvent déclarée
+   « endommagée », sans bouton « Ouvrir quand même ». La clé est validée contre
+   le schéma Tauri 2 (`config.schema.json`, jsonschema), mais la correction est
+   écrite **de mémoire et non testée sur un vrai Mac**.
+2. `release.yml` : la licence 7-Zip et `7z.dll` sont lues dans le dossier fixe
+   `../deps/bin/7zip` (= `download::install_dir`) au lieu de `dirname "$exe"`,
+   fragile avec les séparateurs mixtes de Windows. Le YAML des 4 workflows se
+   charge correctement. actionlint et shellcheck ne sont pas installés, donc
+   pas de lint cette fois.
+3. `scripts/deps.lock.json` : les 8 messages macOS (Ghostscript, Tesseract,
+   ImageMagick, whisper ; x64 et arm64) disent maintenant « non fourni en
+   v0.1.0 » au lieu de « build prévu en phase 3 / dans deps.yml ». Les messages
+   Linux de Ghostscript et Tesseract, qui citent encore la phase 3, n'ont pas
+   été modifiés (hors périmètre).
+
+État des tests : **non relancés**. `cargo` est toujours refusé par les
+permissions de la session. De plus, `libwebkit2gtk-4.1-dev` n'est plus installé
+et le cache apt ne contient aucun `.deb` WebKit. Dernier résultat connu :
+bilan phase 3b (fmt, clippy et 176 tests à 0 échec). Aucune correction ne
+touche au code Rust.
+
+Pas de remote, de push ni de tag : l'authentification à l'API GitHub est
+toujours indisponible et la création du dépôt attend l'utilisateur.

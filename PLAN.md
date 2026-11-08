@@ -425,6 +425,9 @@ raison explicite (jamais de faux succès).
 - README macOS 15 : clic droit « Ouvrir » ne suffit plus → tenter d'ouvrir, puis
   Réglages Système › Confidentialité et sécurité › « Ouvrir quand même » ; secours
   `xattr -cr "/Applications/Boite a outils.app"` (nom du bundle = `productName` de `tauri.conf.json`, sans accents).
+- macOS : signature **ad hoc** (`bundle.macOS.signingIdentity = "-"`) pour
+  éviter « app endommagée » sur Apple Silicon ; pas de signature Developer ID
+  ni de notarisation en v0.1.0. Non testé sur un vrai Mac.
 
 ---
 
