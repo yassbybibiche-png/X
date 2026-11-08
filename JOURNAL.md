@@ -183,3 +183,29 @@ Limites restantes :
 - Frontend vérifié par `node --check` seulement (pas de GUI sur la VM).
 - Ghostscript, 7-Zip, ImageMagick, typst, yt-dlp, whisper, Real-ESRGAN :
   outils correspondants toujours P2/P3.
+
+## 2026-11-08 — Phase 3a (vrais sidecars installés sur la VM)
+
+Binaires présents : Ghostscript 10.02.1, Tesseract 5.3.4 (eng+fra), ImageMagick
+6.9.12 (`convert`, pas de `magick`), 7-Zip 23.01 (`7z`), pandoc 3.1.3, qpdf
+11.9.0, ffmpeg 8.1.2, yt-dlp 2024.04.09. Installés **par le code de l'app**
+(`cargo run --example installer -- <id> ../.scratch/appdata/bin` : HTTPS,
+taille + SHA-256 du manifeste vérifiés) : typst 0.15.1 et qpdf 12.4.2. Les tests
+« réels » utilisent PATH + `.scratch/appdata/bin` et sont ignorés proprement
+si le binaire manque (CI).
+
+Progression (une ligne par groupe) :
+- Groupe PDF : `pdf-compresser`, `pdf-niveaux-de-gris`, `pdf-reparer`,
+  `pdf-vers-images` (PNG/JPEG, `%` du chemin échappé, tout ou rien),
+  `pdf-ocr` (gs 300 DPI → Tesseract fra+eng par page → réassemblage lopdf),
+  `pdf-proteger` / `pdf-deproteger` (**qpdf devient un sidecar**, AES-256, mot
+  de passe jamais sur la ligne de commande : `qpdf @fichier`), `pdf-filigrane`,
+  `pdf-numeroter`, `pdf-supprimer-metadonnees` (lopdf). Manifeste : qpdf 12.4.2
+  (4 plateformes, `aliases` pour les liens symboliques des bibliothèques).
+  Téléchargements : ureq utilise désormais les racines de confiance du système
+  (`platform-verifier`) — l'installeur échouait derrière le proxy TLS de la VM
+  (« UnknownIssuer »), comme il l'aurait fait derrière un proxy d'entreprise.
+  Tests **réels** : gs (compression plus légère, gris vérifié pixel par pixel,
+  réparation d'une xref cassée, rastérisation), Tesseract (texte « BONJOUR »
+  retrouvé dans un PDF image), qpdf (chiffrement, mauvais mot de passe refusé
+  sans sortie, déchiffrement). PDF 18/18. fmt OK, clippy OK, test 131/131.

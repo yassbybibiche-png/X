@@ -5,7 +5,31 @@ use crate::sidecar::Binary;
 
 const PDF: &[&str] = &["pdf"];
 const GS: &[Binary] = &[Binary::Ghostscript];
+const QPDF: &[Binary] = &[Binary::Qpdf];
 const C: Category = Category::Pdf;
+
+/// Langues de l'OCR (Tesseract).
+pub(super) const OCR_LANG: OptionDef = OptionDef {
+    key: "langue",
+    label: "Langue du texte",
+    kind: OptionKind::Choice {
+        choices: &[
+            Choice {
+                value: "fra+eng",
+                label: "Français + anglais",
+            },
+            Choice {
+                value: "fra",
+                label: "Français",
+            },
+            Choice {
+                value: "eng",
+                label: "Anglais",
+            },
+        ],
+    },
+    default: "fra+eng",
+};
 
 const PAGES: OptionDef = OptionDef {
     key: "pages",
@@ -130,7 +154,7 @@ pub const TOOLS: &[ToolDef] = &[
             },
             default: "ebook",
         }],
-        ..BASE
+        status: Status::Phase1,
     },
     ToolDef {
         id: "pdf-ocr",
@@ -140,8 +164,8 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: &[Binary::Ghostscript, Binary::Tesseract],
         input: files(PDF),
         output: "<nom>-ocr.pdf",
-        status: Status::Phase3,
-        ..BASE
+        options: &[OCR_LANG],
+        status: Status::Phase1,
     },
     ToolDef {
         id: "pdf-vers-images",
@@ -151,17 +175,36 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: GS,
         input: files(PDF),
         output: "<nom>-p<N>.png / .jpg",
-        options: &[OptionDef {
-            key: "dpi",
-            label: "Résolution (DPI)",
-            kind: OptionKind::Number {
-                min: 36.0,
-                max: 600.0,
-                step: 1.0,
+        options: &[
+            OptionDef {
+                key: "dpi",
+                label: "Résolution (DPI)",
+                kind: OptionKind::Number {
+                    min: 36.0,
+                    max: 600.0,
+                    step: 1.0,
+                },
+                default: "150",
             },
-            default: "150",
-        }],
-        ..BASE
+            OptionDef {
+                key: "format",
+                label: "Format",
+                kind: OptionKind::Choice {
+                    choices: &[
+                        Choice {
+                            value: "png",
+                            label: "PNG (sans perte)",
+                        },
+                        Choice {
+                            value: "jpg",
+                            label: "JPEG (plus léger)",
+                        },
+                    ],
+                },
+                default: "png",
+            },
+        ],
+        status: Status::Phase1,
     },
     ToolDef {
         id: "pdf-images-vers-pdf",
@@ -177,21 +220,23 @@ pub const TOOLS: &[ToolDef] = &[
         id: "pdf-proteger",
         category: C,
         name: "Protéger par mot de passe",
-        description: "Chiffre un PDF (AES-256) avec un mot de passe d'ouverture.",
+        description: "Chiffre un PDF (AES-256, qpdf) avec un mot de passe d'ouverture.",
+        binaries: QPDF,
         input: single(PDF),
         output: "<nom>-protege.pdf",
         options: &[PASSWORD],
-        ..BASE
+        status: Status::Phase1,
     },
     ToolDef {
         id: "pdf-deproteger",
         category: C,
         name: "Retirer le mot de passe",
-        description: "Déchiffre un PDF dont vous connaissez le mot de passe.",
+        description: "Déchiffre un PDF dont vous connaissez le mot de passe (qpdf).",
+        binaries: QPDF,
         input: single(PDF),
         output: "<nom>-deprotege.pdf",
         options: &[PASSWORD],
-        ..BASE
+        status: Status::Phase1,
     },
     ToolDef {
         id: "pdf-filigrane",
@@ -200,12 +245,25 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Ajoute un texte en filigrane sur toutes les pages.",
         input: files(PDF),
         output: "<nom>-filigrane.pdf",
-        options: &[OptionDef {
-            key: "texte",
-            label: "Texte du filigrane",
-            kind: OptionKind::Text,
-            default: "CONFIDENTIEL",
-        }],
+        options: &[
+            OptionDef {
+                key: "texte",
+                label: "Texte du filigrane",
+                kind: OptionKind::Text,
+                default: "CONFIDENTIEL",
+            },
+            OptionDef {
+                key: "opacite",
+                label: "Opacité (%)",
+                kind: OptionKind::Number {
+                    min: 5.0,
+                    max: 100.0,
+                    step: 5.0,
+                },
+                default: "25",
+            },
+        ],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -225,7 +283,47 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Ajoute un numéro de page en pied de chaque page.",
         input: files(PDF),
         output: "<nom>-numerote.pdf",
-        status: Status::Phase3,
+        options: &[
+            OptionDef {
+                key: "format",
+                label: "Format",
+                kind: OptionKind::Choice {
+                    choices: &[
+                        Choice {
+                            value: "n",
+                            label: "3",
+                        },
+                        Choice {
+                            value: "n-sur-total",
+                            label: "3 / 10",
+                        },
+                        Choice {
+                            value: "page-n",
+                            label: "Page 3",
+                        },
+                    ],
+                },
+                default: "n-sur-total",
+            },
+            OptionDef {
+                key: "position",
+                label: "Position",
+                kind: OptionKind::Choice {
+                    choices: &[
+                        Choice {
+                            value: "bas-centre",
+                            label: "En bas, au centre",
+                        },
+                        Choice {
+                            value: "bas-droite",
+                            label: "En bas, à droite",
+                        },
+                    ],
+                },
+                default: "bas-centre",
+            },
+        ],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -236,6 +334,7 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: GS,
         input: files(PDF),
         output: "<nom>-gris.pdf",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -246,7 +345,7 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: GS,
         input: files(PDF),
         output: "<nom>-repare.pdf",
-        status: Status::Phase3,
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -256,6 +355,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Efface auteur, logiciel, dates et métadonnées XMP d'un PDF.",
         input: files(PDF),
         output: "<nom>-sans-metadonnees.pdf",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {

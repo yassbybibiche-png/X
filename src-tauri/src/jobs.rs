@@ -117,12 +117,16 @@ impl ToolContext<'_> {
         args: &[S],
         on_line: Option<LineFn>,
     ) -> Result<RunOutput> {
-        let opts = RunOptions {
-            timeout: SIDECAR_TIMEOUT,
-            cancel: Some(self.cancel),
+        sidecar::run_with(program, args, self.run_options(on_line))?.check(label)
+    }
+
+    /// Options d'exécution standard d'un sidecar (délai long, annulable).
+    pub fn run_options<'b>(&'b self, on_line: Option<LineFn<'b>>) -> RunOptions<'b> {
+        RunOptions {
             on_line,
-        };
-        sidecar::run_with(program, args, opts)?.check(label)
+            cancel: Some(self.cancel),
+            ..RunOptions::timeout(SIDECAR_TIMEOUT)
+        }
     }
 }
 

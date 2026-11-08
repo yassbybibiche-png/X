@@ -423,9 +423,8 @@ fn hms(secs: f64) -> String {
 fn header_report(ctx: &ToolContext, ffmpeg: &Path, path: &Path) -> Result<String> {
     let args = [OsString::from("-hide_banner"), "-i".into(), path.into()];
     let opts = sidecar::RunOptions {
-        timeout: std::time::Duration::from_secs(60),
         cancel: Some(ctx.cancel),
-        on_line: None,
+        ..sidecar::RunOptions::timeout(std::time::Duration::from_secs(60))
     };
     let run = sidecar::run_with(ffmpeg, &args, opts)?;
     let lines: Vec<&str> = run

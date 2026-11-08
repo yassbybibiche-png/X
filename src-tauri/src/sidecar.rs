@@ -31,6 +31,7 @@ pub enum Binary {
     YtDlp,
     Whisper,
     RealEsrgan,
+    Qpdf,
 }
 
 /// Mode d'obtention d'un binaire (voir PLAN.md §3.3).
@@ -44,7 +45,7 @@ pub enum Delivery {
 }
 
 impl Binary {
-    pub const ALL: [Binary; 10] = [
+    pub const ALL: [Binary; 11] = [
         Binary::Ghostscript,
         Binary::Tesseract,
         Binary::Ffmpeg,
@@ -55,6 +56,7 @@ impl Binary {
         Binary::YtDlp,
         Binary::Whisper,
         Binary::RealEsrgan,
+        Binary::Qpdf,
     ];
 
     /// Identifiant stable (utilisé par le frontend et le manifeste).
@@ -70,6 +72,7 @@ impl Binary {
             Binary::YtDlp => "yt-dlp",
             Binary::Whisper => "whisper",
             Binary::RealEsrgan => "realesrgan",
+            Binary::Qpdf => "qpdf",
         }
     }
 
@@ -86,6 +89,7 @@ impl Binary {
             Binary::YtDlp => "yt-dlp",
             Binary::Whisper => "whisper.cpp",
             Binary::RealEsrgan => "Real-ESRGAN (ncnn)",
+            Binary::Qpdf => "qpdf",
         }
     }
 
@@ -102,6 +106,7 @@ impl Binary {
             Binary::YtDlp => "Unlicense",
             Binary::Whisper => "MIT",
             Binary::RealEsrgan => "BSD-3-Clause",
+            Binary::Qpdf => "Apache-2.0",
         }
     }
 
@@ -119,13 +124,17 @@ impl Binary {
             Binary::Ghostscript => &["gs"],
             Binary::Tesseract => &["tesseract"],
             Binary::Ffmpeg => &["ffmpeg"],
-            Binary::ImageMagick => &["magick"],
+            // `convert` = nom d'ImageMagick 6 (Ubuntu/Debian). Jamais sous
+            // Windows : `convert.exe` y est l'outil système de conversion FAT→NTFS.
+            Binary::ImageMagick if cfg!(windows) => &["magick"],
+            Binary::ImageMagick => &["magick", "convert"],
             Binary::SevenZip => &["7zz", "7za", "7z"],
             Binary::Pandoc => &["pandoc"],
             Binary::Typst => &["typst"],
             Binary::YtDlp => &["yt-dlp"],
             Binary::Whisper => &["whisper-cli"],
             Binary::RealEsrgan => &["realesrgan-ncnn-vulkan"],
+            Binary::Qpdf => &["qpdf"],
         }
     }
 
@@ -340,6 +349,8 @@ pub struct RunOptions<'a> {
     pub timeout: Duration,
     pub cancel: Option<&'a CancelToken>,
     pub on_line: Option<LineFn<'a>>,
+    /// Dossier de travail du processus (sinon celui de l'application).
+    pub current_dir: Option<&'a Path>,
 }
 
 impl RunOptions<'_> {
@@ -348,6 +359,7 @@ impl RunOptions<'_> {
             timeout,
             cancel: None,
             on_line: None,
+            current_dir: None,
         }
     }
 }
@@ -364,7 +376,7 @@ pub fn run_with<S: AsRef<OsStr>>(
     args: &[S],
     opts: RunOptions,
 ) -> Result<RunOutput> {
-    let mut child = spawn(program, args)?;
+    let mut child = spawn(program, args, opts.current_dir)?;
     let out_pipe = child.stdout.take();
     let err_pipe = child.stderr.take();
     std::thread::scope(|s| {
@@ -382,8 +394,11 @@ pub fn run_with<S: AsRef<OsStr>>(
     })
 }
 
-fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S]) -> Result<Child> {
+fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], dir: Option<&Path>) -> Result<Child> {
     let mut cmd = Command::new(program);
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

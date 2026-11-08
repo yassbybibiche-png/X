@@ -68,6 +68,9 @@ struct PlatformSpec {
     files: Vec<FileSpec>,
     #[serde(default)]
     unavailable: Option<String>,
+    /// Liens symboliques de l'archive (jamais extraits) recréés en copies.
+    #[serde(default)]
+    aliases: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -112,6 +115,8 @@ pub struct Offer {
     pub files: Vec<FileSpec>,
     /// Taille totale à télécharger.
     pub size: u64,
+    /// Copies à créer après extraction : chemin du lien → chemin de la cible.
+    pub aliases: BTreeMap<String, String>,
 }
 
 /// Offre de téléchargement pour la plateforme courante, ou raison de l'absence.
@@ -145,6 +150,7 @@ fn offer_for(binary: Binary, key: &str) -> Result<Offer, String> {
         exe,
         size: platform.files.iter().map(|f| f.size).sum(),
         files: platform.files.clone(),
+        aliases: platform.aliases.clone(),
     })
 }
 
@@ -173,7 +179,12 @@ impl Fetch for Http {
         if !url.starts_with("https://") {
             bail!("URL refusée (HTTPS obligatoire) : {url}");
         }
+        // Racines de confiance du système (proxy d'entreprise, magasin Windows/macOS).
+        let tls = ureq::tls::TlsConfig::builder()
+            .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+            .build();
         let agent = ureq::Agent::config_builder()
+            .tls_config(tls)
             .timeout_connect(Some(Duration::from_secs(20)))
             .timeout_recv_body(None)
             .build()
@@ -236,6 +247,7 @@ fn fill_staging(
         fs::remove_file(&local)?;
     }
     fs::remove_dir_all(&downloads)?;
+    create_aliases(staging, &offer.aliases)?;
     let exe = PathBuf::from(&offer.exe);
     let full = staging.join(&exe);
     if !full.is_file() {
@@ -243,6 +255,23 @@ fn fill_staging(
     }
     make_executable(&full)?;
     Ok(exe)
+}
+
+/// Recrée en copies les liens symboliques ignorés à l'extraction
+/// (ex. `libqpdf.so.30` → `libqpdf.so.30.4.2`). Chemins relatifs sûrs uniquement.
+fn create_aliases(staging: &Path, aliases: &BTreeMap<String, String>) -> Result<()> {
+    for (link, target) in aliases {
+        let safe = |p: &str| {
+            extract::safe_relative(Path::new(p), 0)
+                .with_context(|| format!("chemin invalide dans le manifeste : {p}"))
+        };
+        let (link, target) = (staging.join(safe(link)?), staging.join(safe(target)?));
+        if !link.exists() {
+            fs::copy(&target, &link)
+                .with_context(|| format!("copie de {} impossible", target.display()))?;
+        }
+    }
+    Ok(())
 }
 
 /// Remplace l'installation précédente (mise à jour) par le dossier de travail.
@@ -496,6 +525,7 @@ mod tests {
             exe: exe.into(),
             size: files.iter().map(|f| f.size).sum(),
             files,
+            aliases: BTreeMap::new(),
         }
     }
 
@@ -537,11 +567,9 @@ mod tests {
         }
         let gs = offer_for(Binary::Ghostscript, "linux-x64").unwrap_err();
         assert!(gs.contains("ghostscript"), "{gs}");
-        assert!(
-            offer_for(Binary::Whisper, "linux-x64")
-                .unwrap_err()
-                .contains("phase 3")
-        );
+        for key in ["linux-x64", "windows-x64", "macos-x64", "macos-arm64"] {
+            assert!(offer_for(Binary::Qpdf, key).is_ok(), "qpdf {key}");
+        }
     }
 
     #[test]
@@ -652,6 +680,25 @@ mod tests {
         let fetch = Memory(HashMap::from([(s.url.clone(), b"MZ".to_vec())]));
         let err = run_install(&offer("outil", vec![s]), tmp.path(), &fetch).unwrap_err();
         assert!(err.to_string().contains("7-Zip"), "{err}");
+    }
+
+    #[test]
+    fn alias_recree_en_copie() {
+        let tmp = tempfile::tempdir().unwrap();
+        let archive = tar_gz(&[("bin/outil", b"#!x"), ("lib/libx.so.1.2", b"ELF")]);
+        let a = spec("https://exemple.test/o.tar.gz", &archive, Kind::TarGz);
+        let fetch = Memory(HashMap::from([(a.url.clone(), archive.clone())]));
+        let mut o = offer("bin/outil", vec![a]);
+        o.aliases
+            .insert("lib/libx.so.1".into(), "lib/libx.so.1.2".into());
+        run_install(&o, tmp.path(), &fetch).unwrap();
+        assert_eq!(
+            fs::read(tmp.path().join("outil/lib/libx.so.1")).unwrap(),
+            b"ELF"
+        );
+        o.aliases
+            .insert("../evasion".into(), "lib/libx.so.1.2".into());
+        assert!(run_install(&o, tmp.path(), &fetch).is_err());
     }
 
     #[test]

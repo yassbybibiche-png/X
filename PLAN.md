@@ -124,18 +124,18 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | pdf-extraire-pages | — (lopdf) | 1 PDF + plages → `-extrait.pdf` | **P1** |
 | pdf-supprimer-pages | — (lopdf) | 1 PDF + plages → `-allege.pdf` | **P1** |
 | pdf-pivoter | — (lopdf) | PDF + angle (+ pages) → `-pivote.pdf` | **P1** |
-| pdf-compresser | ghostscript | PDF + niveau (écran/ebook/impression) → `-compresse.pdf` | P2 |
-| pdf-ocr | ghostscript + tesseract | PDF scanné → PDF avec couche texte `-ocr.pdf` | P3 |
-| pdf-vers-images | ghostscript | PDF + DPI + format → PNG/JPG par page | P2 |
+| pdf-compresser | ghostscript | PDF + niveau (écran/ebook/impression) → `-compresse.pdf` | **P1** |
+| pdf-ocr | ghostscript + tesseract | PDF scanné → pages rastérisées 300 DPI → Tesseract (fra+eng, image + couche texte) → réassemblage lopdf `-ocr.pdf` | **P1** |
+| pdf-vers-images | ghostscript | PDF + DPI + format → `<nom>-p<N>.png/.jpg` par page | **P1** |
 | pdf-images-vers-pdf | — (image + lopdf) | images → `<1re>-images.pdf` | **P1** |
-| pdf-proteger | — (lopdf, AES-256) / qpdf en secours | PDF + mot de passe → `-protege.pdf` | P2 |
-| pdf-deproteger | — (lopdf) / qpdf en secours | PDF + mot de passe → `-deprotege.pdf` | P2 |
-| pdf-filigrane | — (lopdf) | PDF + texte → `-filigrane.pdf` | P2 |
+| pdf-proteger | qpdf (AES-256) | PDF + mot de passe → `-protege.pdf` | **P1** |
+| pdf-deproteger | qpdf | PDF + mot de passe → `-deprotege.pdf` | **P1** |
+| pdf-filigrane | — (lopdf) | PDF + texte + opacité → `-filigrane.pdf` (diagonale, Helvetica WinAnsi) | **P1** |
 | pdf-vers-texte | — (lopdf) | PDF → `.txt` (couche texte ; PDF scanné → OCR) | **P1** |
-| pdf-numeroter | — (lopdf) | PDF → `-numerote.pdf` | P3 |
-| pdf-niveaux-de-gris | ghostscript | PDF → `-gris.pdf` | P2 |
-| pdf-reparer | ghostscript | PDF abîmé → `-repare.pdf` | P3 |
-| pdf-supprimer-metadonnees | — (lopdf) | PDF → `-sans-metadonnees.pdf` | P2 |
+| pdf-numeroter | — (lopdf) | PDF + format + position → `-numerote.pdf` | **P1** |
+| pdf-niveaux-de-gris | ghostscript | PDF → `-gris.pdf` | **P1** |
+| pdf-reparer | ghostscript | PDF abîmé → `-repare.pdf` (table des objets reconstruite) | **P1** |
+| pdf-supprimer-metadonnees | — (lopdf) | PDF → `-sans-metadonnees.pdf` (/Info, XMP, PieceInfo) | **P1** |
 | pdf-infos | — (lopdf) | PDF → `-infos.txt` (pages, version, format, métadonnées) | **P1** |
 
 ### Documents (15) — pandoc, toujours `--sandbox`
@@ -267,7 +267,7 @@ secours.
 | yt-dlp | Unlicense | ~15–35 Mo | **téléchargé au premier usage, jamais figé** | leçon 2 : dossier modifiable, bouton « Mettre à jour », version affichée ; binaires autonomes officiels (`yt-dlp.exe`, `yt-dlp_macos`, `yt-dlp_linux`) → pas de Python requis |
 | whisper.cpp (`whisper-cli`) | MIT | 2–10 Mo | téléchargé au premier usage | binaire Windows officiel ; macOS/Linux build CI |
 | Real-ESRGAN ncnn Vulkan | BSD-3 | 20–50 Mo (avec modèles) | téléchargé au premier usage | zips officiels par OS ; nécessite Vulkan → message clair + repli redimensionnement Lanczos si absent |
-| qpdf (seulement si l'API de chiffrement lopdf est insuffisante) | Apache-2.0 | ~10 Mo | téléchargé au premier usage | Ghostscript ne chiffre qu'en RC4 (obsolète) |
+| qpdf | Apache-2.0 | 3–28 Mo (zip officiel) | téléchargé au premier usage (binaires officiels Linux/macOS/Windows, SHA-256 publiés par l'amont) | **sidecar du projet depuis la phase 3a** : voir §3.9 |
 
 Les sources de téléchargement sont, par ordre de préférence : release officielle
 amont ; sinon binaire construit par notre workflow `deps.yml` à partir des
@@ -363,6 +363,23 @@ raison explicite (jamais de faux succès).
 - `smoke.yml` : smoke test lourd (exécute un outil de chaque binaire réel)
   **uniquement** en `workflow_dispatch` ou sur tag de pré-release (`v*-rc*`),
   jamais à chaque push.
+
+### 3.9 qpdf devient un sidecar (phase 3a) — protection PDF
+- Chiffrement/déchiffrement par mot de passe : **qpdf**, pas lopdf. lopdf 0.47
+  sait lire certains PDF chiffrés mais n'offre pas d'API d'écriture AES-256
+  fiable ; Ghostscript ne chiffre qu'en RC4 40/128 bits (obsolète, cassable).
+  qpdf (Apache-2.0) est la référence pour AES-256 (R6, PDF 2.0).
+- Distribution : zips officiels qpdf 12.4.2 pour linux-x64, macos-x64,
+  macos-arm64 et windows-x64 (msvc64), SHA-256 épinglés dans le manifeste
+  (repris des empreintes publiées par l'amont et revérifiés localement). Les
+  liens symboliques des bibliothèques (`libqpdf.so.30`, `libqpdf.30.dylib`)
+  ne sont jamais extraits (sécurité) : le manifeste les déclare en `aliases`,
+  recréés en **copies** après extraction.
+- Le mot de passe ne passe **jamais** sur la ligne de commande (visible par
+  `ps` / le Gestionnaire des tâches) : les arguments sont écrits dans un
+  fichier temporaire privé et passés par `qpdf @fichier`.
+- Mot de passe propriétaire = mot de passe d'ouverture (pas de restrictions
+  d'usage factices : elles ne protègent rien une fois le PDF ouvert).
 
 ### 3.8 Divers
 - Complexité : `clippy::cognitive_complexity` activé avec seuil 15

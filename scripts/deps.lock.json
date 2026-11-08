@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "Binaires tiers : URL et SHA-256 épinglés par plateforme. Toute modification invalide le cache CI (clé = hash de ce fichier). Voir PLAN.md §3.3. kind : raw | gz | zip | tar.gz | tar.xz | 7z (7z = extrait avec le 7-Zip inclus). strip = composants de chemin retirés à l'extraction. exe = chemin de l'exécutable relatif au dossier d'installation <données>/bin/<id>/.",
+  "comment": "Binaires tiers : URL et SHA-256 épinglés par plateforme. Toute modification invalide le cache CI (clé = hash de ce fichier). Voir PLAN.md §3.3. kind : raw | gz | zip | tar.gz | tar.xz | 7z (7z = extrait avec le 7-Zip inclus). strip = composants de chemin retirés à l'extraction. exe = chemin de l'exécutable relatif au dossier d'installation <données>/bin/<id>/. aliases = copies créées après extraction à la place des liens symboliques (jamais extraits, voir extract.rs) : lien → cible.",
   "binaries": {
     "7zip": {
       "version": "26.06",
@@ -395,6 +395,67 @@
               "dest": "yt-dlp"
             }
           ]
+        }
+      }
+    },
+    "qpdf": {
+      "version": "12.4.2",
+      "license": "Apache-2.0",
+      "source": "https://github.com/qpdf/qpdf/releases/tag/v12.4.2",
+      "platforms": {
+        "linux-x64": {
+          "exe": "bin/qpdf",
+          "files": [
+            {
+              "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
+              "sha256": "db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
+              "size": 4040257,
+              "kind": "zip"
+            }
+          ],
+          "aliases": {
+            "lib/libqpdf.so.30": "lib/libqpdf.so.30.4.2"
+          }
+        },
+        "windows-x64": {
+          "exe": "bin/qpdf.exe",
+          "files": [
+            {
+              "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-msvc64.zip",
+              "sha256": "db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d",
+              "size": 28183147,
+              "kind": "zip",
+              "strip": 1
+            }
+          ]
+        },
+        "macos-x64": {
+          "exe": "bin/qpdf",
+          "files": [
+            {
+              "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-x86_64.zip",
+              "sha256": "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481",
+              "size": 2975560,
+              "kind": "zip"
+            }
+          ],
+          "aliases": {
+            "lib/libqpdf.30.dylib": "lib/libqpdf.30.4.2.dylib"
+          }
+        },
+        "macos-arm64": {
+          "exe": "bin/qpdf",
+          "files": [
+            {
+              "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-arm64.zip",
+              "sha256": "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79",
+              "size": 3269125,
+              "kind": "zip"
+            }
+          ],
+          "aliases": {
+            "lib/libqpdf.30.dylib": "lib/libqpdf.30.4.2.dylib"
+          }
         }
       }
     }

@@ -47,6 +47,18 @@ pub fn merge(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
     Ok(vec![out.commit()])
 }
 
+/// Fusionne des PDF (dans l'ordre) en un document en mémoire.
+pub(crate) fn merge_paths(paths: &[PathBuf]) -> Result<Document> {
+    let mut collected = Collected {
+        max_id: 1,
+        ..Collected::default()
+    };
+    for path in paths {
+        collect(path, &mut collected)?;
+    }
+    assemble(collected)
+}
+
 pub(crate) fn load(path: &Path) -> Result<Document> {
     let doc = Document::load(path).context("PDF illisible ou endommagé")?;
     if doc.is_encrypted() {

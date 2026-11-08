@@ -4,12 +4,19 @@
 pub mod archives;
 pub mod archives_extract;
 pub mod documents;
+pub mod gs;
 pub mod images;
 pub mod images_edit;
 pub mod media;
+pub mod ocr;
 pub mod pdf;
+pub mod pdf_gs;
 pub mod pdf_images;
 pub mod pdf_pages;
+pub mod pdf_qpdf;
+pub mod pdf_stamp;
+#[cfg(test)]
+pub mod testutil;
 pub mod utilitaires;
 
 use std::path::{Path, PathBuf};
@@ -31,6 +38,16 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-vers-texte", pdf_pages::to_text),
     ("pdf-infos", pdf_pages::info),
     ("pdf-images-vers-pdf", pdf_images::images_to_pdf),
+    ("pdf-compresser", pdf_gs::compress),
+    ("pdf-niveaux-de-gris", pdf_gs::grayscale),
+    ("pdf-reparer", pdf_gs::repair),
+    ("pdf-vers-images", pdf_gs::to_images),
+    ("pdf-ocr", pdf_gs::ocr_pdf),
+    ("pdf-proteger", pdf_qpdf::protect),
+    ("pdf-deproteger", pdf_qpdf::unprotect),
+    ("pdf-filigrane", pdf_stamp::watermark),
+    ("pdf-numeroter", pdf_stamp::number_pages),
+    ("pdf-supprimer-metadonnees", pdf_stamp::strip_metadata),
     ("documents-md-vers-docx", documents::md_to_docx),
     ("documents-md-vers-odt", documents::md_to_odt),
     ("documents-md-vers-html", documents::md_to_html),
