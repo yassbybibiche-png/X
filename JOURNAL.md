@@ -151,3 +151,35 @@ Progression (une ligne par groupe) :
   pendant une tâche, gestion de l'événement `cancelled`, bandeau jaune
   « Avertissements » (images distantes retirées, etc.). `node --check` OK ;
   non testé graphiquement (VM sans GUI).
+
+### Bilan phase 2b (2026-11-08)
+Outils réellement exécutables (statut P1 / `Status::Phase1`, implémentés et
+testés) : **45 sur 82** — PDF 8/18, Documents 13/15, Images 8/17,
+Vidéo/audio 9/19, Archives 6/9, Utilitaires 1/4. Restent P2 : 21, P3 : 16.
+
+Commandes finales (dans `src-tauri/`) :
+- `cargo fmt --check` → code 0.
+- `cargo clippy --all-targets -- -D warnings` → code 0, aucun avertissement.
+- `cargo test` → 115 passés, 0 échec (lib) ; 0 test dans main et doctests.
+  Le test de bout en bout ffmpeg a réellement tourné (ffmpeg 8.1.2 présent).
+
+Aucune commande n'a dépassé 10 minutes (clippy/test < 1 min après le premier
+build). Aucun binaire commité ; aucun test dépendant du réseau.
+
+Limites restantes :
+- pandoc absent de la VM : les 13 outils Documents sont testés avec un faux
+  pandoc (arguments, `--sandbox`, avertissements, erreurs), pas sur de vraies
+  conversions. docx→md n'extrait pas les images. md/docx→PDF (typst) : P2.
+- Références d'images Markdown de type « définition » (`![x][id]` + `[id]: url`)
+  non réécrites : pandoc en sandbox les supprime quand même, et son
+  `[WARNING]` est relayé, mais sans la liste explicite des URL.
+- Retrait EXIF JPEG : métadonnées placées après le premier SOS (rarissime)
+  non retirées. Compression image = JPEG uniquement.
+- Outils ffmpeg : progression par fichier (un lot repart de 0 à chaque
+  fichier). Codecs fixes par format (H.264/AAC, VP9/Opus).
+- `pdf-vers-texte` : qualité dépendante de l'encodage des polices (lopdf) ;
+  pas d'OCR. Extraction de pages : ordre du document conservé (pas de
+  réordonnancement).
+- Frontend vérifié par `node --check` seulement (pas de GUI sur la VM).
+- Ghostscript, 7-Zip, ImageMagick, typst, yt-dlp, whisper, Real-ESRGAN :
+  outils correspondants toujours P2/P3.
