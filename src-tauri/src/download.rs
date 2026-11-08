@@ -456,10 +456,9 @@ fn untar<R: Read>(reader: R, dest: &Path, strip: usize, hooks: &Hooks) -> Result
 }
 
 fn xz_to_file(src: &Path, dest: &Path) -> Result<()> {
-    let mut input = BufReader::new(File::open(src)?);
+    let input = BufReader::new(File::open(src)?);
     let mut out = BufWriter::new(File::create(dest)?);
-    lzma_rs::xz_decompress(&mut input, &mut out)
-        .map_err(|e| anyhow::anyhow!("décompression xz impossible : {e}"))?;
+    crate::xz::decompress(input, &mut out).context("décompression xz impossible")?;
     out.flush()?;
     Ok(())
 }

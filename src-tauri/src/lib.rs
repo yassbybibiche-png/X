@@ -13,6 +13,7 @@ pub mod registry;
 pub mod sidecar;
 pub mod timeutil;
 pub mod tools;
+pub mod xz;
 pub mod ytdlp;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

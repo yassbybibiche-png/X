@@ -277,3 +277,11 @@ Progression (une ligne par groupe) :
   `installer`, même vérification taille + SHA-256). Nouveau test réel des 13
   conversions (texte accentué relu) + 2 PDF (texte, image locale, image Word).
   Documents 15/15. fmt OK, clippy OK, test 164/164.
+- Correctif téléchargement (bug de la phase 2) : l'archive Linux officielle de
+  7-Zip 26.06 (`.tar.xz`) utilise le filtre **BCJ x86** que `lzma-rs` refuse
+  (« Unknown filter id 4 ») → le bouton Télécharger de 7-Zip aurait échoué sous
+  Linux. Nouveau module `xz.rs` : conteneur xz lu par l'app, LZMA2 par lzma-rs,
+  filtre BCJ x86 (algorithme xz-embedded) ; test contre l'outil `xz` du système.
+  7-Zip 26.06 installé depuis le manifeste (fichier de `.scratch/dl`, SHA-256
+  vérifié) : les tests Archives tournent désormais avec 7zz 26.06. (crates.io et
+  GitHub injoignables à ce moment : pas de nouvelle dépendance.) test 166/166.
