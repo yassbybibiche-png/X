@@ -97,3 +97,4 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .diagnostic tr.telechargeable td:nth-child(2) { color: var(--alerte); font-weight: 600; }
 .diagnostic .telechargement { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .diagnostic .telechargement progress { width: 7rem; }
+.aide-binaire { margin: 0.25rem 0; color: var(--alerte); }

@@ -112,11 +112,36 @@ function choisirOutil(outil) {
   const statut = $(".statut", panneau);
   statut.textContent = raison ?? "Disponible";
   statut.className = "statut " + (raison ? "indisponible" : "disponible");
+  statut.after(...aidesBinairesManquants(outil));
   $(".choisir", panneau).addEventListener("click", choisirFichiers);
   $(".lancer", panneau).addEventListener("click", lancer);
   $(".annuler", panneau).addEventListener("click", annuler);
   construireOptions($(".options", panneau), outil.options);
   afficherFichiers();
+}
+
+// Sur machine vierge : pour chaque binaire manquant, bouton « Télécharger »
+// (même commande que le Diagnostic, progression affichée là-bas) ou, s'il n'est
+// pas téléchargeable sur ce système, la raison et quoi installer.
+function aidesBinairesManquants(outil) {
+  if (outil.status !== "phase1") return [];
+  return binairesManquants(outil).map((id) => {
+    const b = etat.binaires.get(id);
+    const p = el("p", undefined, "aide-binaire");
+    if (b?.state === "telechargeable") {
+      const bouton = el("button", `Télécharger ${b.label} ${b.pinnedVersion ?? ""} (${taille(b.downloadSize)})`, "petit");
+      bouton.type = "button";
+      bouton.title = `Licence : ${b.license}. Source épinglée, empreinte SHA-256 vérifiée.`;
+      bouton.addEventListener("click", () => {
+        telecharger(b);
+        afficherVue("diagnostic");
+      });
+      p.append(bouton);
+    } else {
+      p.textContent = `${b?.label ?? id} : ${b?.unavailableReason ?? "non disponible sur ce système — voir l'onglet Diagnostic."}`;
+    }
+    return p;
+  });
 }
 
 function construireOptions(form, options) {
@@ -424,13 +449,15 @@ async function activerDepot() {
 
 // ---------- Démarrage ----------
 
+function afficherVue(vue) {
+  for (const o of document.querySelectorAll(".tab")) o.classList.toggle("active", o.dataset.view === vue);
+  $("#vue-outils").hidden = vue !== "outils";
+  $("#vue-diagnostic").hidden = vue !== "diagnostic";
+}
+
 function vues() {
   for (const onglet of document.querySelectorAll(".tab")) {
-    onglet.addEventListener("click", () => {
-      for (const o of document.querySelectorAll(".tab")) o.classList.toggle("active", o === onglet);
-      $("#vue-outils").hidden = onglet.dataset.view !== "outils";
-      $("#vue-diagnostic").hidden = onglet.dataset.view !== "diagnostic";
-    });
+    onglet.addEventListener("click", () => afficherVue(onglet.dataset.view));
   }
   $("#rafraichir").addEventListener("click", diagnostic);
   $("#recherche").addEventListener("input", (e) => {

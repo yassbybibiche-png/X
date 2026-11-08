@@ -374,3 +374,10 @@ Progression (une ligne par groupe) :
   `Resolver::from_env` ajoute ces dossiers après le PATH
   (`known_install_dirs`, testé avec une arborescence factice ; le plus récent
   `gs*` d'abord). fmt OK, clippy OK, test 174/174.
+- Correctif d'audit (machine vierge, frontend) : le panneau d'un outil disait
+  seulement « Binaire manquant : X ». Il affiche désormais, pour chaque binaire
+  manquant, un bouton « Télécharger X <version> (<taille>) » (même commande
+  `download_binary` que le Diagnostic, vers lequel il bascule pour la
+  progression) ou, si X n'est pas téléchargeable sur ce système, la raison du
+  manifeste (quoi installer : paquet, Homebrew…). `node --check` OK ; non testé
+  graphiquement (VM sans GUI).
