@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boîte à outils</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Boîte à outils</h1>
+      <nav class="tabs" aria-label="Sections">
+        <button type="button" class="tab active" data-view="outils">Outils</button>
+        <button type="button" class="tab" data-view="diagnostic">Diagnostic</button>
+      </nav>
+      <input id="recherche" type="search" placeholder="Rechercher un outil…" aria-label="Rechercher un outil" />
+    </header>
+
+    <main id="vue-outils" class="layout">
+      <aside class="sidebar">
+        <h2>Catégories</h2>
+        <ul id="categories" class="categories"></ul>
+      </aside>
+
+      <section class="liste" aria-label="Liste des outils">
+        <ul id="outils" class="outils"></ul>
+      </section>
+
+      <section id="panneau" class="panneau" aria-live="polite">
+        <p class="vide">Choisissez un outil dans la liste.</p>
+      </section>
+    </main>
+
+    <main id="vue-diagnostic" class="diagnostic" hidden>
+      <h2>Diagnostic des binaires</h2>
+      <p class="aide">
+        Ordre de recherche : 1) inclus avec l'application, 2) dossier de données
+        de l'application (téléchargement au premier usage), 3) PATH du système.
+      </p>
+      <button type="button" id="rafraichir">Relancer le diagnostic</button>
+      <table>
+        <thead>
+          <tr>
+            <th>Binaire</th><th>État</th><th>Version</th><th>Origine</th><th>Chemin</th><th>Licence</th><th>Mode</th>
+          </tr>
+        </thead>
+        <tbody id="binaires"></tbody>
+      </table>
+    </main>
+
+    <template id="tpl-panneau">
+      <h2 class="titre"></h2>
+      <p class="description"></p>
+      <p class="statut"></p>
+      <p class="sortie"></p>
+      <div class="depot" tabindex="0">
+        <p>Glissez-déposez vos fichiers ici</p>
+        <button type="button" class="choisir">Choisir des fichiers…</button>
+      </div>
+      <ul class="fichiers"></ul>
+      <form class="options"></form>
+      <button type="button" class="lancer">Lancer</button>
+      <div class="progression" hidden>
+        <progress max="100" value="0"></progress>
+        <span class="pourcent">0 %</span>
+      </div>
+      <h3>Journal</h3>
+      <ol class="journal"></ol>
+    </template>
+  </body>
+</html>

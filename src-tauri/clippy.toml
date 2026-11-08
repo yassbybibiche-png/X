@@ -1,0 +1,2 @@
+# Garde-fou automatique : complexité ≤ 15 par fonction (voir PLAN.md §3.8).
+cognitive-complexity-threshold = 15

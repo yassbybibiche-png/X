@@ -1,0 +1,36 @@
+[package]
+name = "boite-a-outils"
+version = "0.1.0"
+description = "Boîte à outils — conversions et traitements de fichiers, 100 % locaux"
+authors = ["Boîte à outils contributors"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "boite_a_outils_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt"] }
+anyhow = "1"
+sha2 = "0.11"
+lopdf = "0.47"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif", "ico", "tga", "qoi"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

@@ -1,0 +1,13 @@
+{
+  "name": "boite-a-outils",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Boîte à outils — app de bureau de conversion de fichiers, 100 % locale",
+  "license": "MIT",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
