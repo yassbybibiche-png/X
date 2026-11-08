@@ -397,3 +397,8 @@ Progression (une ligne par groupe) :
   `LPT1`–`LPT9`, avec ou sans extension), les caractères de contrôle, et retire
   les points finaux (que Windows supprime silencieusement). Testé. fmt OK,
   clippy OK.
+- Groupe Audit : `AUDIT.md` — 10 trouvailles corrigées (chacune son commit),
+  vérifications sans anomalie (aucun shell, `--sandbox` via un constructeur
+  unique, sorties `create_new`, un seul client HTTP, aucun secret / e-mail /
+  chemin perso), risques résiduels classés (Windows/macOS et CI jamais
+  exécutés en tête).
