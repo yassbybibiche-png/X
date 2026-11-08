@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use anyhow::{Context, Result, bail};
 
 use crate::jobs::ToolContext;
-use crate::output::{self, OutputFile};
+use crate::output;
 use crate::sidecar::{Binary, Stream};
 use crate::ytdlp::validate_url;
 
@@ -139,13 +139,7 @@ fn place(file: &Path, dest: &Path) -> Result<PathBuf> {
         .extension()
         .map(|e| e.to_string_lossy().to_string())
         .unwrap_or_default();
-    let mut out: OutputFile = output::reserve(dest, &output::stem(file), &ext)?;
-    drop(out.take_file()?);
-    // Remplace notre propre réservation vide (même disque) ; sinon copie.
-    if std::fs::rename(file, out.path()).is_err() {
-        std::fs::copy(file, out.path()).context("copie du fichier téléchargé impossible")?;
-    }
-    Ok(out.commit())
+    output::fill_from(output::reserve(dest, &output::stem(file), &ext)?, file)
 }
 
 /// `video-telecharger`.

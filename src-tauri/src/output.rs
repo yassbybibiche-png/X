@@ -175,6 +175,18 @@ pub fn reserve_dir(dir: &Path, base: &str) -> Result<OutputDir> {
     )
 }
 
+/// Remplit la réservation `out` avec le fichier `src` produit par un sidecar
+/// dans un dossier de travail (renommage sur la même partition, sinon copie).
+/// Seule notre propre réservation vide est remplacée.
+pub fn fill_from(mut out: OutputFile, src: &Path) -> Result<PathBuf> {
+    drop(out.take_file()?);
+    if std::fs::rename(src, out.path()).is_err() {
+        std::fs::copy(src, out.path())
+            .with_context(|| format!("copie de {} impossible", src.display()))?;
+    }
+    Ok(out.commit())
+}
+
 /// Réserve une sortie à côté de `input` : `<stem>-<suffix>.<ext>`.
 pub fn beside(input: &Path, suffix: Option<&str>, ext: &str) -> Result<OutputFile> {
     reserve(&parent_dir(input), &with_suffix(&stem(input), suffix), ext)

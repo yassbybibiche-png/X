@@ -2,6 +2,7 @@
 //! fonctionnent ; les autres renvoient l'erreur « pas encore implémenté ».
 
 pub mod archives;
+pub mod archives_7z;
 pub mod archives_extract;
 pub mod documents;
 pub mod gs;
@@ -114,6 +115,10 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("archives-creer-targz", archives::create_targz),
     ("archives-extraire-tar", archives_extract::extract_tar),
     ("archives-lister", archives_extract::list),
+    ("archives-creer-7z", archives_7z::create_7z),
+    ("archives-extraire-7z", archives_7z::extract_7z),
+    ("archives-tester", archives_7z::test_archive),
+    ("archives-ajouter", archives_7z::add_to_archive),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
 ];
 

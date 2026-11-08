@@ -248,3 +248,18 @@ Progression (une ligne par groupe) :
   Diagnostic : testée avec le vrai yt-dlp 2024.04.09 (mise à jour 2026.10.26
   proposée). Modèles whisper visibles dans le Diagnostic. Vidéo/audio 22/22.
   fmt OK, clippy OK, test 157/157.
+- Groupe Archives : `archives-creer-7z` (niveau, mot de passe facultatif →
+  AES-256 + noms chiffrés), `archives-extraire-7z` (7z/RAR/ISO/CAB/XZ… dans un
+  dossier neuf réservé, liens symboliques restants supprimés), `archives-tester`
+  (rapport dans le journal), nouvel outil `archives-ajouter` (copie complétée
+  `<nom>-complete.<ext>`, original intact ; registre : 87), `archives-lister`
+  étendu aux formats 7-Zip (`7z l -slt`). Mot de passe **jamais en argument** :
+  écrit sur l'entrée standard de 7-Zip (nouvelle option `stdin` de
+  `sidecar::run_with`) ; `--` avant les chemins, `*`/`?` refusés (jokers 7-Zip).
+  Création dans un dossier de travail puis `output::fill_from` (remplit la
+  réservation, jamais d'écrasement). Tests **réels** avec 7-Zip 23.01 (système) :
+  création chiffrée sans écraser `photos.7z`, mauvais mot de passe refusé sans
+  dossier résiduel, extraction, test d'intégrité, listage, ajout à un ZIP,
+  archive abîmée détectée. Installation de 7-Zip 26.06 depuis le manifeste :
+  échec réseau ponctuel (GitHub 504 puis délai de connexion), à retenter.
+  Archives 10/10. fmt OK, clippy OK, test 161/161.

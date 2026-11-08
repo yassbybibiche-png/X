@@ -11,8 +11,37 @@ const ANY: InputSpec = InputSpec {
 };
 
 const ARCHIVE_EXT: &[&str] = &[
-    "zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz", "iso", "cab",
+    "zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz", "iso", "cab", "lzma", "wim",
 ];
+
+const PASSWORD: OptionDef = OptionDef {
+    key: "mot_de_passe",
+    label: "Mot de passe (facultatif)",
+    kind: OptionKind::Password,
+    default: "",
+};
+
+const LEVEL: OptionDef = OptionDef {
+    key: "niveau",
+    label: "Compression",
+    kind: OptionKind::Choice {
+        choices: &[
+            Choice {
+                value: "rapide",
+                label: "Rapide",
+            },
+            Choice {
+                value: "normale",
+                label: "Normale",
+            },
+            Choice {
+                value: "maximale",
+                label: "Maximale",
+            },
+        ],
+    },
+    default: "normale",
+};
 
 pub const ZIP_LEVELS: &[Choice] = &[
     Choice {
@@ -69,18 +98,20 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Compresse dans une archive .7z (forte compression, mot de passe possible).",
         binaries: SEVEN,
         input: ANY,
-        output: "<nom>.7z",
-        ..BASE
+        output: "<nom>.7z (un élément) ou archive.7z (plusieurs)",
+        options: &[LEVEL, PASSWORD],
+        status: Status::Phase1,
     },
     ToolDef {
         id: "archives-extraire-7z",
         category: C,
         name: "Extraire 7z / RAR / ISO…",
-        description: "Extrait la plupart des formats d'archive avec 7-Zip.",
+        description: "Extrait la plupart des formats d'archive avec 7-Zip (7z, RAR, ISO, CAB, XZ…).",
         binaries: SEVEN,
         input: files(ARCHIVE_EXT),
         output: "dossier <nom>/",
-        ..BASE
+        options: &[PASSWORD],
+        status: Status::Phase1,
     },
     ToolDef {
         id: "archives-creer-tar",
@@ -116,8 +147,9 @@ pub const TOOLS: &[ToolDef] = &[
         id: "archives-lister",
         category: C,
         name: "Lister le contenu",
-        description: "Écrit la liste des fichiers d'une archive ZIP, TAR ou TAR.GZ (noms, tailles) dans un .txt.",
-        input: files(&["zip", "tar", "gz", "tgz"]),
+        description: "Écrit la liste des fichiers d'une archive (noms, tailles) dans un .txt : ZIP/TAR/TAR.GZ intégrés, autres formats via 7-Zip.",
+        input: files(ARCHIVE_EXT),
+        options: &[PASSWORD],
         output: "<nom>-contenu.txt",
         status: Status::Phase1,
         ..BASE
@@ -130,6 +162,21 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: SEVEN,
         input: files(ARCHIVE_EXT),
         output: "rapport dans le journal",
-        ..BASE
+        options: &[PASSWORD],
+        status: Status::Phase1,
+    },
+    ToolDef {
+        id: "archives-ajouter",
+        category: C,
+        name: "Ajouter à une archive",
+        description: "Ajoute des fichiers ou dossiers à une archive .7z, .zip ou .tar existante (copie complétée, l'original n'est pas modifié).",
+        binaries: SEVEN,
+        input: InputSpec {
+            min_files: 2,
+            ..ANY
+        },
+        output: "<nom>-complete.<ext>",
+        options: &[PASSWORD],
+        status: Status::Phase1,
     },
 ];

@@ -351,6 +351,9 @@ pub struct RunOptions<'a> {
     pub on_line: Option<LineFn<'a>>,
     /// Dossier de travail du processus (sinon celui de l'application).
     pub current_dir: Option<&'a Path>,
+    /// Données écrites sur l'entrée standard puis fermée (ex. mot de passe :
+    /// jamais visible dans la liste des processus, contrairement aux arguments).
+    pub stdin: Option<&'a [u8]>,
 }
 
 impl RunOptions<'_> {
@@ -360,6 +363,7 @@ impl RunOptions<'_> {
             cancel: None,
             on_line: None,
             current_dir: None,
+            stdin: None,
         }
     }
 }
@@ -376,10 +380,17 @@ pub fn run_with<S: AsRef<OsStr>>(
     args: &[S],
     opts: RunOptions,
 ) -> Result<RunOutput> {
-    let mut child = spawn(program, args, opts.current_dir)?;
+    let mut child = spawn(program, args, &opts)?;
     let out_pipe = child.stdout.take();
     let err_pipe = child.stderr.take();
+    let in_pipe = child.stdin.take();
     std::thread::scope(|s| {
+        if let (Some(mut pipe), Some(data)) = (in_pipe, opts.stdin) {
+            s.spawn(move || {
+                use std::io::Write;
+                let _ = pipe.write_all(data);
+            });
+        }
         let on_line = opts.on_line;
         let out = s.spawn(move || read_stream(out_pipe, Stream::Stdout, on_line));
         let err = s.spawn(move || read_stream(err_pipe, Stream::Stderr, on_line));
@@ -394,13 +405,18 @@ pub fn run_with<S: AsRef<OsStr>>(
     })
 }
 
-fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], dir: Option<&Path>) -> Result<Child> {
+fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], opts: &RunOptions) -> Result<Child> {
     let mut cmd = Command::new(program);
-    if let Some(dir) = dir {
+    if let Some(dir) = opts.current_dir {
         cmd.current_dir(dir);
     }
+    let stdin = if opts.stdin.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    };
     cmd.args(args)
-        .stdin(Stdio::null())
+        .stdin(stdin)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     hide_console(&mut cmd);
@@ -743,6 +759,17 @@ mod tests {
             .map(|(_, l)| l.clone())
             .collect();
         assert_eq!(got, ["a", "b", "c"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn donnees_sur_l_entree_standard() {
+        let opts = RunOptions {
+            stdin: Some(b"secret\n"),
+            ..RunOptions::timeout(Duration::from_secs(5))
+        };
+        let out = run_with(Path::new("cat"), &[] as &[&str], opts).unwrap();
+        assert_eq!(out.stdout, "secret\n");
     }
 
     #[test]

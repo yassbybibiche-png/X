@@ -88,23 +88,34 @@ fn untar(path: &Path, dest: &Path, hooks: &Hooks) -> Result<Stats> {
 }
 
 /// Ligne de listage : taille, nom (dossiers suffixés de `/`).
-struct Item {
-    name: String,
-    size: u64,
-    is_dir: bool,
+pub(crate) struct Item {
+    pub name: String,
+    pub size: u64,
+    pub is_dir: bool,
 }
 
 /// `archives-lister` : `<nom>-contenu.txt`.
 pub fn list(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
     per_file(ctx, |path| {
         let mut out = output::beside(path, Some("contenu"), "txt")?;
-        let items = list_items(path)?;
-        let report = render(&output::file_name(path), &items)?;
+        let report = if is_builtin(path) {
+            render(&output::file_name(path), &list_items(path)?)?
+        } else {
+            super::archives_7z::list_with_7z(ctx, path)?
+        };
         out.take_file()?
             .write_all(report.as_bytes())
             .context("écriture de la liste impossible")?;
         Ok(out.commit())
     })
+}
+
+/// Formats listés par le moteur intégré (les autres passent par 7-Zip).
+fn is_builtin(path: &Path) -> bool {
+    let lower = output::file_name(path).to_lowercase();
+    [".zip", ".tar", ".tar.gz", ".tgz"]
+        .iter()
+        .any(|e| lower.ends_with(e))
 }
 
 fn list_items(path: &Path) -> Result<Vec<Item>> {
@@ -150,7 +161,7 @@ fn list_tar<R: Read>(reader: R) -> Result<Vec<Item>> {
     Ok(items)
 }
 
-fn render(archive: &str, items: &[Item]) -> Result<String> {
+pub(crate) fn render(archive: &str, items: &[Item]) -> Result<String> {
     let mut r = String::new();
     writeln!(r, "Contenu de {archive}")?;
     writeln!(r)?;
