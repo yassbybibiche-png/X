@@ -68,6 +68,8 @@ fn conversion(tool_id: &str) -> Result<Conversion> {
         | "documents-html-vers-md"
         | "documents-epub-vers-md" => c("gfm", "md", &["--wrap=none"]),
         "documents-extraire-texte" => c("plain", "txt", &["--wrap=none"]),
+        // Chaîne pandoc → typst : voir `to_pdf`.
+        "documents-md-vers-pdf" | "documents-docx-vers-pdf" => c("pdf", "pdf", &[]),
         other => bail!("conversion inconnue : {other}"),
     })
 }
@@ -89,7 +91,7 @@ pub fn input_format(path: &Path) -> Result<&'static str> {
     })
 }
 
-/// Point d'entrée commun à tous les outils `documents-*` (sauf PDF).
+/// Point d'entrée commun à tous les outils `documents-*`.
 pub fn convert(ctx: &ToolContext, tool_id: &str) -> Result<Vec<PathBuf>> {
     let conv = conversion(tool_id)?;
     let pandoc = ctx.binary(Binary::Pandoc)?;
@@ -103,6 +105,8 @@ macro_rules! tools {
 }
 
 tools! {
+    md_to_pdf => "documents-md-vers-pdf",
+    docx_to_pdf => "documents-docx-vers-pdf",
     md_to_docx => "documents-md-vers-docx",
     md_to_odt => "documents-md-vers-odt",
     md_to_html => "documents-md-vers-html",
@@ -129,24 +133,105 @@ fn convert_one(
     let from = input_format(path)?;
     let tmp = tempfile::tempdir().context("dossier temporaire impossible")?;
     let source = prepare_input(ctx, path, from, tmp.path())?;
+    if conv.to == "pdf" {
+        return to_pdf(ctx, pandoc, (path, &source, from), tmp.path(), out);
+    }
     let mut extra: Vec<String> = conv.extra.iter().map(|s| s.to_string()).collect();
     if conv.ext == "html" {
         extra.push(format!("--metadata=pagetitle:{}", output::stem(path)));
     }
     let extra: Vec<&str> = extra.iter().map(String::as_str).collect();
     let args = pandoc_args(from, conv.to, &source, out.path(), &extra);
+    run_pandoc(ctx, pandoc, &args, None)?;
+    if from == "docx" && conv.ext == "md" {
+        ctx.reporter
+            .log("Les images du document Word ne sont pas extraites (mode isolé).");
+    }
+    Ok(out.commit())
+}
+
+/// Lance pandoc (avertissements relayés) ; erreur claire pour un pandoc de
+/// distribution sans fichiers de données (incompatible avec `--sandbox`).
+fn run_pandoc(
+    ctx: &ToolContext,
+    pandoc: &Path,
+    args: &[OsString],
+    dir: Option<&Path>,
+) -> Result<()> {
     let reporter = ctx.reporter;
     let on_line = |stream: Stream, line: &str| {
         if stream == Stream::Stderr && line.contains("WARNING") {
             reporter.warn(&format!("pandoc : {}", line.trim()));
         }
     };
-    ctx.run_sidecar(pandoc, "pandoc", &args, Some(&on_line))?;
-    if from == "docx" && conv.ext == "md" {
-        ctx.reporter
-            .log("Les images du document Word ne sont pas extraites (mode isolé).");
+    let opts = crate::sidecar::RunOptions {
+        current_dir: dir,
+        ..ctx.run_options(Some(&on_line))
+    };
+    let run = crate::sidecar::run_with(pandoc, args, opts)?;
+    if !run.status.success() && run.stderr.contains("Could not find data file") {
+        bail!(
+            "ce pandoc ({}) n'embarque pas ses fichiers de données (paquet de distribution) : \
+             il ne peut pas produire ce format en mode isolé (--sandbox, toujours actif). \
+             Installez le pandoc officiel depuis l'onglet Diagnostic.",
+            pandoc.display()
+        );
     }
-    Ok(out.commit())
+    run.check("pandoc")?;
+    Ok(())
+}
+
+/// PDF en deux étapes, dans le dossier de travail `dir` :
+/// 1. pandoc `--sandbox` → `document.typ` (images Markdown/HTML écrites dans
+///    `dir`, images Word extraites dans `dir/media`) ;
+/// 2. `typst compile --root <dir>` : typst ne peut lire que ce dossier.
+///
+/// En Markdown, les blocs bruts (`{=typst}`) sont désactivés : un document ne
+/// peut pas injecter de code typst. Police embarquée dans typst (les gabarits
+/// pandoc ≤ 3.1 passent sinon une liste de polices vide, refusée par typst).
+fn to_pdf(
+    ctx: &ToolContext,
+    pandoc: &Path,
+    (path, source, from): (&Path, &Path, &'static str),
+    dir: &Path,
+    out: output::OutputFile,
+) -> Result<PathBuf> {
+    let typst = ctx.binary(Binary::Typst)?;
+    if source != path {
+        materialize_data_uris(source, dir)?;
+    }
+    let reader = if from == "markdown" {
+        "markdown-raw_attribute"
+    } else {
+        from
+    };
+    let typ = dir.join("document.typ");
+    let mut extra = vec!["-s", "-V", "mainfont=Libertinus Serif"];
+    if from != "markdown" && from != "html" {
+        extra.push("--extract-media=media");
+    }
+    ctx.reporter.progress(10.0, "Mise en page (pandoc)…");
+    run_pandoc(
+        ctx,
+        pandoc,
+        &pandoc_args(reader, "typst", source, &typ, &extra),
+        Some(dir),
+    )?;
+    ctx.reporter.progress(50.0, "Création du PDF (typst)…");
+    let pdf = dir.join("document.pdf");
+    let args: Vec<OsString> = vec![
+        "compile".into(),
+        "--root".into(),
+        dir.into(),
+        typ.into(),
+        pdf.clone().into(),
+    ];
+    let opts = crate::sidecar::RunOptions {
+        current_dir: Some(dir),
+        ..ctx.run_options(None)
+    };
+    crate::sidecar::run_with(&typst, &args, opts)?.check("typst")?;
+    output::fill_from(out, &pdf)
 }
 
 /// Copie pré-traitée (Markdown/HTML) dans `tmp`, ou le fichier d'origine.
@@ -169,6 +254,46 @@ fn prepare_input(ctx: &ToolContext, path: &Path, from: &str, tmp: &Path) -> Resu
     let copy = tmp.join(output::file_name(path));
     std::fs::write(&copy, report.text.as_bytes())?;
     Ok(copy)
+}
+
+static DATA_URI: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"data:image/(?P<sub>png|jpeg|gif|webp|bmp|svg\+xml);base64,(?P<b64>[A-Za-z0-9+/=]+)",
+    )
+    .unwrap()
+});
+
+/// Pour typst (qui ne lit pas les URI `data:`) : chaque image incorporée est
+/// écrite dans `dir` sous un nom fixe (`image-<n>.<ext>`) et référencée par ce nom.
+fn materialize_data_uris(source: &Path, dir: &Path) -> Result<()> {
+    let text = std::fs::read_to_string(source)?;
+    let mut n = 0;
+    let mut failure = None;
+    let out = DATA_URI.replace_all(&text, |c: &Captures| {
+        n += 1;
+        let ext = match &c["sub"] {
+            "jpeg" => "jpg",
+            "svg+xml" => "svg",
+            other => other,
+        };
+        let name = format!("image-{n}.{ext}");
+        let bytes = base64::engine::general_purpose::STANDARD.decode(&c["b64"]);
+        match bytes
+            .map_err(anyhow::Error::from)
+            .and_then(|b| Ok(std::fs::write(dir.join(&name), b)?))
+        {
+            Ok(()) => name,
+            Err(e) => {
+                failure = Some(e);
+                String::new()
+            }
+        }
+    });
+    if let Some(e) = failure {
+        return Err(e.context("préparation des images impossible"));
+    }
+    std::fs::write(source, out.as_bytes())?;
+    Ok(())
 }
 
 /// Résultat du pré-traitement des images.
@@ -407,9 +532,9 @@ mod tests {
     fn tous_les_outils_documents_en_sandbox() {
         let bin = tempfile::tempdir().unwrap();
         let resolver = fake_pandoc(bin.path());
-        let tools = registry::all()
-            .into_iter()
-            .filter(|t| t.category == Category::Documents && t.status == registry::Status::Phase1);
+        let tools = registry::all().into_iter().filter(|t| {
+            t.category == Category::Documents && t.binaries == [crate::sidecar::Binary::Pandoc]
+        });
         let mut count = 0;
         for tool in tools {
             let work = tempfile::tempdir().unwrap();
@@ -473,6 +598,145 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err:#}").contains("format inconnu"), "{err:#}");
+        assert!(!work.path().join("a.docx").exists());
+    }
+
+    /// Vrais pandoc + typst (typst téléchargé et vérifié par l'installeur de
+    /// l'app dans `.scratch/appdata/bin`) : Markdown (image locale incorporée)
+    /// et Word → PDF ; le texte est relu dans le PDF.
+    #[test]
+    fn markdown_et_word_vers_pdf_avec_typst() {
+        use crate::sidecar::Binary;
+        let Some(r) =
+            crate::tools::testutil::real(&[Binary::Pandoc, Binary::Typst, Binary::Ghostscript])
+        else {
+            return;
+        };
+        let work = tempfile::tempdir().unwrap();
+        image::RgbImage::from_pixel(20, 10, image::Rgb([200, 0, 0]))
+            .save(work.path().join("logo.png"))
+            .unwrap();
+        let md = work.path().join("note.md");
+        let body = "# Compte rendu\n\nBonjour, voici l'été.\n\n![logo](logo.png)\n\n```{=typst}\n#read(\"note.md\")\n```\n";
+        fs::write(&md, body).unwrap();
+        let run = |id: &str, input: &Path| {
+            execute(
+                id,
+                JobInput::new(vec![input.to_path_buf()]),
+                &MemoryReporter::default(),
+                &r,
+            )
+            .unwrap_or_else(|e| panic!("{id} : {e:#}"))
+        };
+        let pdf = run("documents-md-vers-pdf", &md);
+        assert_eq!(pdf, vec![work.path().join("note.pdf")]);
+        let text = crate::tools::testutil::gs_text(&r, &pdf[0]);
+        assert!(
+            text.contains("Compte rendu") && text.contains("été"),
+            "{text}"
+        );
+        assert!(
+            !text.contains("# Compte"),
+            "bloc typst brut exécuté : {text}"
+        );
+        let raw = fs::read(&pdf[0]).unwrap();
+        assert!(
+            raw.windows(6).any(|w| w == b"/Image"),
+            "image locale absente du PDF"
+        );
+
+        let docx = run("documents-md-vers-docx", &md);
+        let pdf2 = run("documents-docx-vers-pdf", &docx[0]);
+        assert_eq!(pdf2, vec![work.path().join("note-2.pdf")]);
+        assert!(crate::tools::testutil::gs_text(&r, &pdf2[0]).contains("Compte rendu"));
+        let raw = fs::read(&pdf2[0]).unwrap();
+        assert!(
+            raw.windows(6).any(|w| w == b"/Image"),
+            "image du .docx absente du PDF"
+        );
+    }
+
+    /// Les 13 autres conversions avec le vrai pandoc (chaînées depuis un .md).
+    #[test]
+    fn conversions_reelles_avec_pandoc() {
+        use crate::sidecar::Binary;
+        let Some(r) = crate::tools::testutil::real(&[Binary::Pandoc]) else {
+            return;
+        };
+        let work = tempfile::tempdir().unwrap();
+        let md = work.path().join("doc.md");
+        fs::write(&md, "# Titre\n\nPremier paragraphe, accentué.\n").unwrap();
+        let probe = execute(
+            "documents-md-vers-docx",
+            JobInput::new(vec![md.clone()]),
+            &MemoryReporter::default(),
+            &r,
+        );
+        if let Err(e) = probe {
+            assert!(e.to_string().contains("fichiers de données"), "{e:#}");
+            eprintln!("pandoc de distribution sans fichiers de données : test réel ignoré");
+            return;
+        }
+        let run = |id: &str, input: &Path| -> PathBuf {
+            let outs = execute(
+                id,
+                JobInput::new(vec![input.to_path_buf()]),
+                &MemoryReporter::default(),
+                &r,
+            )
+            .unwrap_or_else(|e| panic!("{id} : {e:#}"));
+            outs[0].clone()
+        };
+        let docx = run("documents-md-vers-docx", &md);
+        let odt = run("documents-md-vers-odt", &md);
+        let html = run("documents-md-vers-html", &md);
+        let epub = run("documents-md-vers-epub", &md);
+        let derived = [
+            run("documents-docx-vers-md", &docx),
+            run("documents-docx-vers-odt", &docx),
+            run("documents-docx-vers-html", &docx),
+            run("documents-odt-vers-docx", &odt),
+            run("documents-odt-vers-md", &odt),
+            run("documents-html-vers-md", &html),
+            run("documents-html-vers-docx", &html),
+            run("documents-epub-vers-md", &epub),
+            run("documents-extraire-texte", &docx),
+        ];
+        let text = |p: &Path| match p.extension().and_then(|e| e.to_str()) {
+            Some("txt") => p.to_path_buf(),
+            _ => run("documents-extraire-texte", p),
+        };
+        for out in derived.iter().chain([&docx, &odt, &html, &epub]) {
+            let t = fs::read_to_string(text(out)).unwrap();
+            assert!(
+                t.contains("Premier paragraphe, accentué."),
+                "{} : {t}",
+                out.display()
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pandoc_de_distribution_message_clair() {
+        let bin = tempfile::tempdir().unwrap();
+        crate::tools::testutil::fake_bin(
+            bin.path(),
+            "pandoc",
+            "echo 'Could not find data file data/data/docx/[Content_Types].xml' >&2; exit 97",
+        );
+        let resolver = Resolver::new(Some(bin.path().to_path_buf()), None, None);
+        let work = tempfile::tempdir().unwrap();
+        let input = work.path().join("a.md");
+        fs::write(&input, "x").unwrap();
+        let err = execute(
+            "documents-md-vers-docx",
+            JobInput::new(vec![input]),
+            &MemoryReporter::default(),
+            &resolver,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("fichiers de données"), "{err}");
         assert!(!work.path().join("a.docx").exists());
     }
 

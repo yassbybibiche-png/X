@@ -56,6 +56,8 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-filigrane", pdf_stamp::watermark),
     ("pdf-numeroter", pdf_stamp::number_pages),
     ("pdf-supprimer-metadonnees", pdf_stamp::strip_metadata),
+    ("documents-md-vers-pdf", documents::md_to_pdf),
+    ("documents-docx-vers-pdf", documents::docx_to_pdf),
     ("documents-md-vers-docx", documents::md_to_docx),
     ("documents-md-vers-odt", documents::md_to_odt),
     ("documents-md-vers-html", documents::md_to_html),

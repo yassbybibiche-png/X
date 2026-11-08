@@ -2,17 +2,36 @@
 //! (téléchargement HTTPS, taille + SHA-256 vérifiés, extraction sûre) :
 //! `cargo run --example installer -- <id> <dossier bin>`
 //! (ex. `typst ../.scratch/appdata/bin`, utilisé par les tests réels).
+//! `--depuis <dossier>` : prend les fichiers déjà téléchargés dans ce dossier
+//! (même nom que la fin de l'URL) au lieu du réseau — taille et SHA-256 sont
+//! vérifiés exactement de la même façon.
 
 use std::path::PathBuf;
 
-use boite_a_outils_lib::download::{self, Http, InstallHooks};
+use std::io::Read;
+
+use boite_a_outils_lib::download::{self, Fetch, Http, InstallHooks};
 use boite_a_outils_lib::sidecar::{Binary, Resolver};
+
+/// Fichiers locaux nommés comme la fin de l'URL.
+struct LocalDir(PathBuf);
+
+impl Fetch for LocalDir {
+    fn open(&self, url: &str) -> anyhow::Result<Box<dyn Read + Send>> {
+        let name = url.rsplit('/').next().unwrap_or_default();
+        Ok(Box::new(std::fs::File::open(self.0.join(name))?))
+    }
+}
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let (Some(id), Some(dir)) = (args.next(), args.next()) else {
-        eprintln!("usage : installer <id> <dossier bin>");
+        eprintln!("usage : installer <id> <dossier bin> [--depuis <dossier>]");
         std::process::exit(2);
+    };
+    let local = match (args.next().as_deref(), args.next()) {
+        (Some("--depuis"), Some(d)) => Some(LocalDir(PathBuf::from(d))),
+        _ => None,
     };
     let binary = Binary::ALL
         .into_iter()
@@ -34,7 +53,11 @@ fn main() {
         cancel: None,
         seven_zip,
     };
-    match download::install(&offer, &PathBuf::from(dir), &Http, &hooks) {
+    let fetch: &dyn Fetch = match &local {
+        Some(l) => l,
+        None => &Http,
+    };
+    match download::install(&offer, &PathBuf::from(dir), fetch, &hooks) {
         Ok(exe) => println!("{}", exe.display()),
         Err(e) => {
             eprintln!("échec : {e:#}");

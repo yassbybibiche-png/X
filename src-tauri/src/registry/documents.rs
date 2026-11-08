@@ -29,7 +29,7 @@ const fn conv(
 /// Sortie PDF : nécessite typst en plus (pas encore implémenté).
 const fn conv_pdf(id: &'static str, name: &'static str, input: &'static [&'static str]) -> ToolDef {
     ToolDef {
-        status: Status::Phase2,
+        status: Status::Phase1,
         ..conv(id, name, input, "<nom>.pdf", PANDOC_PDF)
     }
 }

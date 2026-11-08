@@ -145,11 +145,11 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | documents-md-vers-odt | pandoc | .md → .odt | **P1** |
 | documents-md-vers-html | pandoc | .md → .html autonome | **P1** |
 | documents-md-vers-epub | pandoc | .md → .epub | **P1** |
-| documents-md-vers-pdf | pandoc + typst | .md → .pdf | P2 |
+| documents-md-vers-pdf | pandoc + typst | .md → .pdf (blocs typst bruts désactivés, police embarquée) | **P1** |
 | documents-docx-vers-md | pandoc | .docx → .md (images non extraites : `--extract-media` écrirait hors sandbox) | **P1** |
 | documents-docx-vers-odt | pandoc | .docx → .odt | **P1** |
 | documents-docx-vers-html | pandoc | .docx → .html | **P1** |
-| documents-docx-vers-pdf | pandoc + typst | .docx → .pdf | P2 |
+| documents-docx-vers-pdf | pandoc + typst | .docx → .pdf | **P1** |
 | documents-odt-vers-docx | pandoc | .odt → .docx | **P1** |
 | documents-odt-vers-md | pandoc | .odt → .md | **P1** |
 | documents-html-vers-md | pandoc | .html → .md | **P1** |
@@ -333,6 +333,17 @@ raison explicite (jamais de faux succès).
   - locales hors du dossier → refusées + avertissement.
 - DOCX/ODT/EPUB : les images sont dans le conteneur, lues sans I/O externe ;
   les relations `TargetMode="External"` sont signalées de la même façon.
+- **PDF (phase 3a)** : deux étapes dans un dossier de travail privé —
+  pandoc `--sandbox` → `document.typ` (images Markdown/HTML autorisées écrites
+  dans ce dossier sous des noms fixes, images Word via `--extract-media=media`),
+  puis `typst compile --root <dossier>` lancé par l'app : typst ne peut lire que
+  ce dossier. Markdown lu sans `raw_attribute` (aucun bloc `{=typst}` brut
+  injectable). `-V mainfont=Libertinus Serif` (police embarquée dans typst ; les
+  gabarits pandoc ≤ 3.1 passent sinon une liste vide, refusée par typst 0.15).
+- **pandoc de distribution** (ex. Ubuntu 3.1.3) : compilé sans ses fichiers de
+  données, il ne peut pas produire docx/odt/epub en `--sandbox` (« Could not find
+  data file »). `--sandbox` n'est jamais retiré : l'outil affiche une erreur
+  claire invitant à installer le pandoc officiel (manifeste, données embarquées).
 
 ### 3.5 Transcription : whisper.cpp, modèle `small` quantifié par défaut
 - Modèle par défaut : `ggml-small-q5_1.bin` (~190 Mo au lieu de 466 Mo pour

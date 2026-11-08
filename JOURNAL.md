@@ -263,3 +263,17 @@ Progression (une ligne par groupe) :
   archive abîmée détectée. Installation de 7-Zip 26.06 depuis le manifeste :
   échec réseau ponctuel (GitHub 504 puis délai de connexion), à retenter.
   Archives 10/10. fmt OK, clippy OK, test 161/161.
+- Groupe Documents : `documents-md-vers-pdf` et `documents-docx-vers-pdf` via
+  typst 0.15.1 (téléchargé par l'installeur de l'app, SHA-256 du manifeste
+  vérifié). Chaîne en deux étapes pandoc `--sandbox` → `.typ` puis `typst compile
+  --root <dossier de travail>` (pandoc 3.13 extrayait sinon les images en chemin
+  absolu hors racine typst ; pandoc 3.1.3 passait une liste de polices vide →
+  `-V mainfont=Libertinus Serif`). Blocs typst bruts désactivés en Markdown.
+  **Bug réel trouvé** : le pandoc Ubuntu 3.1.3 (sans fichiers de données
+  embarqués) échoue en `--sandbox` pour docx/odt/epub — les 13 conversions de la
+  phase 2b n'avaient été testées qu'avec un faux pandoc. `--sandbox` conservé,
+  erreur claire ajoutée ; pandoc officiel 3.13 installé dans `.scratch` (depuis
+  `.scratch/dl`, GitHub renvoyant 504 : nouvelle option `--depuis` de l'exemple
+  `installer`, même vérification taille + SHA-256). Nouveau test réel des 13
+  conversions (texte accentué relu) + 2 PDF (texte, image locale, image Word).
+  Documents 15/15. fmt OK, clippy OK, test 164/164.
