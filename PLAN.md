@@ -141,21 +141,21 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 ### Documents (15) — pandoc, toujours `--sandbox`
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
-| documents-md-vers-docx | pandoc | .md → .docx | P2 |
-| documents-md-vers-odt | pandoc | .md → .odt | P2 |
-| documents-md-vers-html | pandoc | .md → .html autonome | P2 |
-| documents-md-vers-epub | pandoc | .md → .epub | P2 |
+| documents-md-vers-docx | pandoc | .md → .docx | **P1** |
+| documents-md-vers-odt | pandoc | .md → .odt | **P1** |
+| documents-md-vers-html | pandoc | .md → .html autonome | **P1** |
+| documents-md-vers-epub | pandoc | .md → .epub | **P1** |
 | documents-md-vers-pdf | pandoc + typst | .md → .pdf | P2 |
-| documents-docx-vers-md | pandoc | .docx → .md (+ images extraites) | P2 |
-| documents-docx-vers-odt | pandoc | .docx → .odt | P2 |
-| documents-docx-vers-html | pandoc | .docx → .html | P2 |
+| documents-docx-vers-md | pandoc | .docx → .md (images non extraites : `--extract-media` écrirait hors sandbox) | **P1** |
+| documents-docx-vers-odt | pandoc | .docx → .odt | **P1** |
+| documents-docx-vers-html | pandoc | .docx → .html | **P1** |
 | documents-docx-vers-pdf | pandoc + typst | .docx → .pdf | P2 |
-| documents-odt-vers-docx | pandoc | .odt → .docx | P2 |
-| documents-odt-vers-md | pandoc | .odt → .md | P2 |
-| documents-html-vers-md | pandoc | .html → .md | P2 |
-| documents-html-vers-docx | pandoc | .html → .docx | P2 |
-| documents-epub-vers-md | pandoc | .epub → .md | P2 |
-| documents-extraire-texte | pandoc | .docx/.odt/.html/.epub/.md/.rtf → .txt | P2 |
+| documents-odt-vers-docx | pandoc | .odt → .docx | **P1** |
+| documents-odt-vers-md | pandoc | .odt → .md | **P1** |
+| documents-html-vers-md | pandoc | .html → .md | **P1** |
+| documents-html-vers-docx | pandoc | .html → .docx | **P1** |
+| documents-epub-vers-md | pandoc | .epub → .md | **P1** |
+| documents-extraire-texte | pandoc | .docx/.odt/.html/.epub/.md/.rtf → .txt | **P1** |
 
 ### Images (17)
 | id | binaire | entrées → sortie | statut |

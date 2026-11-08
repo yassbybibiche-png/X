@@ -124,3 +124,13 @@ Progression (une ligne par groupe) :
   (`output::reserve_dir`, `<nom>-2/` si besoin, supprimé en cas d'échec ou
   d'annulation). Dates de modification désormais conservées dans les ZIP créés.
   fmt OK, clippy OK, test 104/104.
+- Groupe Documents (pandoc) : 13 conversions (md→docx/odt/html/epub,
+  docx→md/odt/html, odt→docx/md, html→md/docx, epub→md, extraction de texte).
+  Un seul constructeur d'arguments (`pandoc_args`) avec `--sandbox` en tête.
+  Pré-traitement Markdown/HTML dans une copie temporaire : images distantes et
+  hors dossier (absolu, `..`, lien symbolique) retirées + avertissement ;
+  locales incorporées en `data:` URI. Avertissements `[WARNING]` de pandoc
+  relayés au journal. Tests avec faux pandoc (args enregistrés, `--sandbox`
+  vérifié pour les 13 outils, échec → erreur typée sans sortie). md/docx→PDF
+  restent P2 (typst). pandoc absent de la VM : aucune conversion réelle testée.
+  fmt OK, clippy OK, test 110/110.

@@ -1,4 +1,4 @@
-use super::{BASE, Category, ToolDef, files};
+use super::{BASE, Category, Status, ToolDef, files};
 use crate::sidecar::Binary;
 
 const PANDOC: &[Binary] = &[Binary::Pandoc];
@@ -21,7 +21,16 @@ const fn conv(
         binaries,
         input: files(input),
         output,
+        status: Status::Phase1,
         ..BASE
+    }
+}
+
+/// Sortie PDF : nécessite typst en plus (pas encore implémenté).
+const fn conv_pdf(id: &'static str, name: &'static str, input: &'static [&'static str]) -> ToolDef {
+    ToolDef {
+        status: Status::Phase2,
+        ..conv(id, name, input, "<nom>.pdf", PANDOC_PDF)
     }
 }
 
@@ -59,18 +68,12 @@ pub const TOOLS: &[ToolDef] = &[
         "<nom>.epub",
         PANDOC,
     ),
-    conv(
-        "documents-md-vers-pdf",
-        "Markdown vers PDF",
-        MD,
-        "<nom>.pdf",
-        PANDOC_PDF,
-    ),
+    conv_pdf("documents-md-vers-pdf", "Markdown vers PDF", MD),
     conv(
         "documents-docx-vers-md",
         "Word vers Markdown",
         DOCX,
-        "<nom>.md + images",
+        "<nom>.md (images non extraites)",
         PANDOC,
     ),
     conv(
@@ -87,13 +90,7 @@ pub const TOOLS: &[ToolDef] = &[
         "<nom>.html",
         PANDOC,
     ),
-    conv(
-        "documents-docx-vers-pdf",
-        "Word vers PDF",
-        DOCX,
-        "<nom>.pdf",
-        PANDOC_PDF,
-    ),
+    conv_pdf("documents-docx-vers-pdf", "Word vers PDF", DOCX),
     conv(
         "documents-odt-vers-docx",
         "ODT vers Word",
@@ -137,6 +134,7 @@ pub const TOOLS: &[ToolDef] = &[
         binaries: PANDOC,
         input: files(&["docx", "odt", "html", "htm", "epub", "md", "rtf"]),
         output: "<nom>.txt",
+        status: Status::Phase1,
         ..BASE
     },
 ];

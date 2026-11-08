@@ -3,6 +3,7 @@
 
 pub mod archives;
 pub mod archives_extract;
+pub mod documents;
 pub mod images;
 pub mod images_edit;
 pub mod pdf;
@@ -29,6 +30,19 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-vers-texte", pdf_pages::to_text),
     ("pdf-infos", pdf_pages::info),
     ("pdf-images-vers-pdf", pdf_images::images_to_pdf),
+    ("documents-md-vers-docx", documents::md_to_docx),
+    ("documents-md-vers-odt", documents::md_to_odt),
+    ("documents-md-vers-html", documents::md_to_html),
+    ("documents-md-vers-epub", documents::md_to_epub),
+    ("documents-docx-vers-md", documents::docx_to_md),
+    ("documents-docx-vers-odt", documents::docx_to_odt),
+    ("documents-docx-vers-html", documents::docx_to_html),
+    ("documents-odt-vers-docx", documents::odt_to_docx),
+    ("documents-odt-vers-md", documents::odt_to_md),
+    ("documents-html-vers-md", documents::html_to_md),
+    ("documents-html-vers-docx", documents::html_to_docx),
+    ("documents-epub-vers-md", documents::epub_to_md),
+    ("documents-extraire-texte", documents::extract_text),
     ("images-convertir", images::convert),
     ("images-redimensionner", images_edit::resize),
     ("images-compresser", images_edit::compress),
