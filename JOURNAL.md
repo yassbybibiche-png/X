@@ -480,3 +480,28 @@ touche au code Rust.
 
 Pas de remote, de push ni de tag : l'authentification à l'API GitHub est
 toujours indisponible et la création du dépôt attend l'utilisateur.
+
+## 2026-11-08 — Publication, vérification finale (atelier, après les 2 passages Claude Code)
+
+Compléments à l'entrée « phase préparatoire » ci-dessus, désormais caducs sur deux points :
+
+- **Messages Linux corrigés aussi** : `deps.lock.json` (commit `eb42817`) — les messages
+  Ghostscript et Tesseract sous Linux disent maintenant « non fourni en v0.1.0 » au lieu de
+  « build prévu en phase 3 ». Plus aucune mention « phase 3 » dans ce fichier (JSON validé).
+- **Tests relancés et verts, vérifiés par l'atelier (pas par Claude Code)** : les sessions
+  non interactives de Claude Code refusent `cargo` (même en chemin absolu) ; c'est l'atelier
+  qui a relancé la vérification. Dépendances système réinstallées sur la VM
+  (`libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`,
+  `patchelf` ; conflit `libzstd1+hatch1` contourné en rétrogradant `libzstd1` vers la version
+  Ubuntu `1.5.5+dfsg2-2build1.1` — attention, ces paquets ne survivent pas à un redémarrage
+  de VM, la CI les installe à chaque run). Résultats du 08/11 ~17h :
+  `cargo fmt --check` OK, `cargo test` **176 passed, 0 failed**, `cargo clippy --all-targets
+  -- -D warnings` OK (exit 0).
+
+Reste bloqué : **création du dépôt GitHub**. `gh` non authentifié, aucun login GitHub dans le
+coffre sécurisé, pas de token stocké sur la VM. La clé SSH de la VM fonctionne (testée :
+`git ls-remote` sur `str-listing-audit` via `ssh.github.com:443` + `ssh_proxy.py` OK), mais
+la création d'un dépôt exige l'API GitHub, donc un token. Nom `boite-a-outils` vérifié libre
+sur `yassbybibiche-png` (API publique : 404). Action attendue côté utilisateur : créer le
+dépôt public vide `boite-a-outils` sur github.com (ou fournir un PAT) — ensuite le push
+via SSH, les workflows `deps.yml` / `smoke.yml`, puis le tag v0.1.0 pourront suivre.
