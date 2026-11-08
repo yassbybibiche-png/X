@@ -365,3 +365,12 @@ Progression (une ligne par groupe) :
   `docs/captures/*.png` marqués « capture à ajouter », aucun fichier image
   fourni. PLAN §3.8 : chemin `xattr` corrigé (le bundle s'appelle
   `Boite a outils.app`, sans accents).
+- Correctif d'audit (résolution) : **macOS** — une app lancée depuis le Finder
+  reçoit un PATH minimal : Ghostscript/Tesseract/ImageMagick/whisper installés
+  par Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`), que le README et le
+  Diagnostic recommandent, n'auraient **jamais** été trouvés. **Windows** — les
+  installeurs officiels (Ghostscript `Program Files\gs\gs*\bin`, Tesseract,
+  7-Zip, ImageMagick, pandoc) n'ajoutent pas toujours leur dossier au PATH.
+  `Resolver::from_env` ajoute ces dossiers après le PATH
+  (`known_install_dirs`, testé avec une arborescence factice ; le plus récent
+  `gs*` d'abord). fmt OK, clippy OK, test 174/174.

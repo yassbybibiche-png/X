@@ -191,12 +191,19 @@ impl Resolver {
         self
     }
 
-    /// Résolveur de production : dossier de l'exécutable + `data_dir` + PATH.
+    /// Résolveur de production : dossier de l'exécutable + `data_dir` + PATH,
+    /// complété par les dossiers d'installation connus (voir [`known_install_dirs`]).
     pub fn from_env(data_dir: Option<PathBuf>) -> Self {
         let bundled = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf));
-        Self::new(bundled, data_dir, std::env::var_os("PATH"))
+        let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+            .map(|p| std::env::split_paths(&p).collect())
+            .unwrap_or_default();
+        dirs.extend(known_install_dirs(std::env::consts::OS, |k| {
+            std::env::var_os(k)
+        }));
+        Self::new(bundled, data_dir, std::env::join_paths(dirs).ok())
     }
 
     /// Dossier `<données app>/bin` (cible des téléchargements).
@@ -228,6 +235,59 @@ impl Resolver {
         let path_var = self.path_var.as_deref()?;
         std::env::split_paths(path_var).find_map(|d| find_in_dir(&d, names))
     }
+}
+
+/// Dossiers d'installation habituels, ajoutés après le PATH :
+/// - macOS : une app lancée depuis le Finder reçoit un PATH minimal
+///   (`/usr/bin:/bin:/usr/sbin:/sbin`) — Homebrew (`/opt/homebrew/bin`,
+///   `/usr/local/bin`) et MacPorts n'y sont pas ;
+/// - Windows : les installeurs officiels de Ghostscript, Tesseract, 7-Zip,
+///   ImageMagick, pandoc ne modifient pas toujours le PATH.
+pub fn known_install_dirs(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    match os {
+        "macos" => ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"]
+            .map(PathBuf::from)
+            .to_vec(),
+        "windows" => windows_install_dirs(&env),
+        _ => Vec::new(),
+    }
+}
+
+fn windows_install_dirs(env: &impl Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = ["ProgramW6432", "ProgramFiles"]
+        .iter()
+        .filter_map(|k| env(k).map(PathBuf::from))
+        .collect();
+    roots.dedup();
+    let mut dirs = Vec::new();
+    for pf in &roots {
+        dirs.extend(["7-Zip", "Tesseract-OCR", "Pandoc"].map(|d| pf.join(d)));
+        // Dossiers versionnés : la version la plus récente d'abord.
+        dirs.extend(versioned(&pf.join("gs"), "gs", Some("bin")));
+        dirs.extend(versioned(pf, "ImageMagick-", None));
+    }
+    if let Some(local) = env("LOCALAPPDATA") {
+        dirs.push(PathBuf::from(local).join("Pandoc"));
+    }
+    dirs
+}
+
+/// Sous-dossiers de `parent` dont le nom commence par `prefix`, triés par nom
+/// décroissant (≈ version la plus récente d'abord), suivis de `sub`.
+fn versioned(parent: &Path, prefix: &str, sub: Option<&str>) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with(prefix))
+        .map(|e| match sub {
+            Some(s) => e.path().join(s),
+            None => e.path(),
+        })
+        .collect();
+    found.sort_unstable_by(|a, b| b.cmp(a));
+    found
 }
 
 /// Exécutable voisin d'un binaire résolu (ex. `ffprobe` à côté de `ffmpeg`).
@@ -693,6 +753,36 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), Binary::ALL.len());
         assert!(Binary::ALL.iter().all(|b| !b.candidates().is_empty()));
+    }
+
+    #[test]
+    fn dossiers_d_installation_connus() {
+        let mac = known_install_dirs("macos", |_| None);
+        assert!(mac.contains(&PathBuf::from("/opt/homebrew/bin")));
+        assert!(known_install_dirs("linux", |_| None).is_empty());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let pf = tmp.path().join("Program Files");
+        for d in [
+            "gs/gs10.02.1/bin",
+            "gs/gs10.08.0/bin",
+            "ImageMagick-7.1.2-Q16-HDRI",
+        ] {
+            fs::create_dir_all(pf.join(d)).unwrap();
+        }
+        let local = tmp.path().join("AppData/Local");
+        let env = |k: &str| match k {
+            "ProgramFiles" | "ProgramW6432" => Some(pf.clone().into_os_string()),
+            "LOCALAPPDATA" => Some(local.clone().into_os_string()),
+            _ => None,
+        };
+        let win = known_install_dirs("windows", env);
+        let pos = |p: PathBuf| win.iter().position(|d| *d == p).unwrap();
+        assert!(pos(pf.join("gs/gs10.08.0/bin")) < pos(pf.join("gs/gs10.02.1/bin")));
+        assert!(win.contains(&pf.join("Tesseract-OCR")));
+        assert!(win.contains(&pf.join("ImageMagick-7.1.2-Q16-HDRI")));
+        assert!(win.contains(&local.join("Pandoc")));
+        assert_eq!(win.iter().filter(|d| **d == pf.join("7-Zip")).count(), 1);
     }
 
     /// Les AppImage (ImageMagick Linux) doivent tourner sans FUSE.
