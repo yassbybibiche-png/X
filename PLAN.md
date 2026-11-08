@@ -424,7 +424,7 @@ raison explicite (jamais de faux succès).
   fichier d'entrée), même règle de non-écrasement.
 - README macOS 15 : clic droit « Ouvrir » ne suffit plus → tenter d'ouvrir, puis
   Réglages Système › Confidentialité et sécurité › « Ouvrir quand même » ; secours
-  `xattr -cr "/Applications/Boîte à outils.app"`.
+  `xattr -cr "/Applications/Boite a outils.app"` (nom du bundle = `productName` de `tauri.conf.json`, sans accents).
 
 ---
 

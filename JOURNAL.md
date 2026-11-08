@@ -355,3 +355,13 @@ Progression (une ligne par groupe) :
   téléchargement réel testé), `images-agrandir-ia` (voie IA : pas de Vulkan ;
   repli Lanczos testé). Disponibilité par OS sur machine vierge (Ghostscript et
   Tesseract : paquet système sous Linux, Homebrew sous macOS…) : PLAN.md §5.
+- Groupe README : `README.md` grand public en français (outils par catégorie,
+  téléchargement par OS avec les noms produits par `release.yml`, premier
+  lancement Windows SmartScreen / macOS 15 « Ouvrir quand même » + secours
+  `xattr -cr` — le clic droit « Ouvrir » ne marche plus / Linux AppImage,
+  téléchargement des outils au premier usage et tableau des programmes à
+  installer par OS, mise à jour yt-dlp, vie privée, limites). Captures :
+  **aucune capture réelle** (VM sans écran) → trois emplacements
+  `docs/captures/*.png` marqués « capture à ajouter », aucun fichier image
+  fourni. PLAN §3.8 : chemin `xattr` corrigé (le bundle s'appelle
+  `Boite a outils.app`, sans accents).
