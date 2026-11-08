@@ -76,11 +76,11 @@ fn zip_entry<R: Read>(
     hooks: &Hooks,
     stats: &mut Stats,
 ) -> Result<()> {
-    let raw_name = entry.name().map(|n| n.into_owned()).unwrap_or_else(|_| "?".into());
-    let Some(rel) = entry
-        .enclosed_name()
-        .and_then(|n| safe_relative(&n, strip))
-    else {
+    let raw_name = entry
+        .name()
+        .map(|n| n.into_owned())
+        .unwrap_or_else(|_| "?".into());
+    let Some(rel) = entry.enclosed_name().and_then(|n| safe_relative(&n, strip)) else {
         if strip == 0 {
             (hooks.warn)(&format!("Chemin dangereux ignoré : {raw_name}"));
         }
@@ -196,7 +196,13 @@ pub fn tar<R: Read>(
         hooks.check()?;
         let (position, total) = progress;
         (hooks.progress)(position.get() as f32 / total.max(1) as f32);
-        tar_entry(entry.context("archive TAR endommagée")?, dest, strip, hooks, &mut stats)?;
+        tar_entry(
+            entry.context("archive TAR endommagée")?,
+            dest,
+            strip,
+            hooks,
+            &mut stats,
+        )?;
     }
     Ok(stats)
 }

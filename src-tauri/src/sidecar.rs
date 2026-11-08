@@ -211,9 +211,8 @@ impl Resolver {
     /// Dossier données : `<bin>/<nom>` (dépôt manuel) ou installation du manifeste.
     fn in_data_dir(&self, binary: Binary) -> Option<PathBuf> {
         let dir = self.data_dir.as_deref()?;
-        find_in_dir(dir, binary.candidates()).or_else(|| {
-            crate::download::installed_exe(dir, binary).filter(|p| is_executable(p))
-        })
+        find_in_dir(dir, binary.candidates())
+            .or_else(|| crate::download::installed_exe(dir, binary).filter(|p| is_executable(p)))
     }
 
     fn in_path(&self, names: &[&str]) -> Option<PathBuf> {
@@ -250,9 +249,19 @@ pub fn is_executable(path: &Path) -> bool {
 /// Erreurs typées d'exécution d'un sidecar (stderr tronqué).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SidecarError {
-    Spawn { program: String, message: String },
-    Timeout { program: String, seconds: u64 },
-    Failed { label: String, status: String, stderr: String },
+    Spawn {
+        program: String,
+        message: String,
+    },
+    Timeout {
+        program: String,
+        seconds: u64,
+    },
+    Failed {
+        label: String,
+        status: String,
+        stderr: String,
+    },
 }
 
 impl fmt::Display for SidecarError {
@@ -712,7 +721,12 @@ mod tests {
             ..RunOptions::timeout(Duration::from_secs(5))
         };
         run_with(Path::new("printf"), &["a\\rb\\nc"], opts).unwrap();
-        let got: Vec<String> = lines.lock().unwrap().iter().map(|(_, l)| l.clone()).collect();
+        let got: Vec<String> = lines
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, l)| l.clone())
+            .collect();
         assert_eq!(got, ["a", "b", "c"]);
     }
 
@@ -732,8 +746,16 @@ mod tests {
         let err = out.check("ls").unwrap_err();
         let typed = err.downcast_ref::<SidecarError>().unwrap();
         assert!(matches!(typed, SidecarError::Failed { label, .. } if label == "ls"));
-        let err = run(Path::new("/nexiste/pas"), &[] as &[&str], Duration::from_secs(5)).unwrap_err();
-        assert!(matches!(err.downcast_ref::<SidecarError>(), Some(SidecarError::Spawn { .. })));
+        let err = run(
+            Path::new("/nexiste/pas"),
+            &[] as &[&str],
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<SidecarError>(),
+            Some(SidecarError::Spawn { .. })
+        ));
     }
 
     #[test]

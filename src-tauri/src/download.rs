@@ -204,8 +204,7 @@ pub fn install(
     fetch: &dyn Fetch,
     hooks: &InstallHooks,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(bin_dir)
-        .with_context(|| format!("création de {}", bin_dir.display()))?;
+    fs::create_dir_all(bin_dir).with_context(|| format!("création de {}", bin_dir.display()))?;
     let staging = bin_dir.join(format!(".{}.partiel", offer.id));
     remove_dir_if_exists(&staging)?;
     fs::create_dir_all(&staging)?;
@@ -300,7 +299,11 @@ fn download_verified(
         }
         received += n as u64;
         if received > file.size {
-            bail!("{} : taille supérieure à la taille épinglée ({} octets)", file.url, file.size);
+            bail!(
+                "{} : taille supérieure à la taille épinglée ({} octets)",
+                file.url,
+                file.size
+            );
         }
         hasher.update(&buf[..n]);
         out.write_all(&buf[..n])?;
@@ -364,7 +367,12 @@ fn unpack(file: &FileSpec, local: &Path, staging: &Path, hooks: &InstallHooks) -
         Kind::TarXz => {
             let tar_path = local.with_extension("tar");
             xz_to_file(local, &tar_path)?;
-            untar(BufReader::new(File::open(&tar_path)?), staging, file.strip, &ex)?;
+            untar(
+                BufReader::new(File::open(&tar_path)?),
+                staging,
+                file.strip,
+                &ex,
+            )?;
             fs::remove_file(&tar_path)?;
         }
         Kind::SevenZip => seven_zip_extract(local, staging, hooks)?,
@@ -529,13 +537,20 @@ mod tests {
         }
         let gs = offer_for(Binary::Ghostscript, "linux-x64").unwrap_err();
         assert!(gs.contains("ghostscript"), "{gs}");
-        assert!(offer_for(Binary::Whisper, "linux-x64").unwrap_err().contains("phase 3"));
+        assert!(
+            offer_for(Binary::Whisper, "linux-x64")
+                .unwrap_err()
+                .contains("phase 3")
+        );
     }
 
     #[test]
     fn installation_tar_gz_avec_strip_et_brut() {
         let tmp = tempfile::tempdir().unwrap();
-        let archive = tar_gz(&[("outil-1.0/bin/outil", b"#!binaire"), ("outil-1.0/LISEZMOI", b"doc")]);
+        let archive = tar_gz(&[
+            ("outil-1.0/bin/outil", b"#!binaire"),
+            ("outil-1.0/LISEZMOI", b"doc"),
+        ]);
         let mut a = spec("https://exemple.test/outil.tar.gz", &archive, Kind::TarGz);
         a.strip = 1;
         let mut extra = spec("https://exemple.test/donnees.bin", b"donnees", Kind::Raw);
@@ -548,7 +563,10 @@ mod tests {
         let exe = run_install(&o, tmp.path(), &fetch).unwrap();
         assert_eq!(exe, tmp.path().join("outil/bin/outil"));
         assert_eq!(fs::read(&exe).unwrap(), b"#!binaire");
-        assert_eq!(fs::read(tmp.path().join("outil/share/donnees.bin")).unwrap(), b"donnees");
+        assert_eq!(
+            fs::read(tmp.path().join("outil/share/donnees.bin")).unwrap(),
+            b"donnees"
+        );
         assert!(!tmp.path().join(".outil.partiel").exists());
         assert!(sidecar::is_executable(&exe));
     }
@@ -560,7 +578,10 @@ mod tests {
         f.dest = Some("outil".into());
         let fetch = Memory(HashMap::from([(f.url.clone(), b"faux contenu".to_vec())]));
         let err = run_install(&offer("outil", vec![f]), tmp.path(), &fetch).unwrap_err();
-        assert!(err.to_string().contains("Empreinte SHA-256 invalide"), "{err}");
+        assert!(
+            err.to_string().contains("Empreinte SHA-256 invalide"),
+            "{err}"
+        );
         assert!(!tmp.path().join("outil").exists());
         assert!(!tmp.path().join(".outil.partiel").exists());
     }
