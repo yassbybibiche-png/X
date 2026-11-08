@@ -73,10 +73,10 @@
           "unavailable": "Artifex ne publie plus de binaire Linux portable (10.08 : uniquement un snap qui exige glibc 2.43). Installez le paquet « ghostscript » de votre distribution ; build portable prévu en phase 3 (deps.yml)."
         },
         "macos-x64": {
-          "unavailable": "Pas de binaire officiel macOS. Installez Ghostscript (ex. Homebrew : brew install ghostscript) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire officiel macOS. Installez Ghostscript (ex. Homebrew : brew install ghostscript) ; non fourni en v0.1.0."
         },
         "macos-arm64": {
-          "unavailable": "Pas de binaire officiel macOS. Installez Ghostscript (ex. Homebrew : brew install ghostscript) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire officiel macOS. Installez Ghostscript (ex. Homebrew : brew install ghostscript) ; non fourni en v0.1.0."
         }
       }
     },
@@ -107,10 +107,10 @@
           "unavailable": "Pas de binaire Tesseract portable officiel pour Linux. Installez « tesseract-ocr » et « tesseract-ocr-fra » ; build prévu en phase 3 (deps.yml)."
         },
         "macos-x64": {
-          "unavailable": "Pas de binaire Tesseract officiel macOS (ex. Homebrew : brew install tesseract tesseract-lang) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire Tesseract officiel macOS (ex. Homebrew : brew install tesseract tesseract-lang) ; non fourni en v0.1.0."
         },
         "macos-arm64": {
-          "unavailable": "Pas de binaire Tesseract officiel macOS (ex. Homebrew : brew install tesseract tesseract-lang) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire Tesseract officiel macOS (ex. Homebrew : brew install tesseract tesseract-lang) ; non fourni en v0.1.0."
         }
       }
     },
@@ -226,10 +226,10 @@
           ]
         },
         "macos-x64": {
-          "unavailable": "Pas de binaire ImageMagick officiel macOS (ex. Homebrew : brew install imagemagick) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire ImageMagick officiel macOS (ex. Homebrew : brew install imagemagick) ; non fourni en v0.1.0."
         },
         "macos-arm64": {
-          "unavailable": "Pas de binaire ImageMagick officiel macOS (ex. Homebrew : brew install imagemagick) ; build prévu en phase 3 (deps.yml)."
+          "unavailable": "Pas de binaire ImageMagick officiel macOS (ex. Homebrew : brew install imagemagick) ; non fourni en v0.1.0."
         }
       }
     },
@@ -545,10 +545,10 @@
           ]
         },
         "macos-x64": {
-          "unavailable": "Pas de binaire whisper.cpp officiel pour macOS (ex. Homebrew : brew install whisper-cpp) ; build prévu dans deps.yml."
+          "unavailable": "Pas de binaire whisper.cpp officiel pour macOS (ex. Homebrew : brew install whisper-cpp) ; non fourni en v0.1.0."
         },
         "macos-arm64": {
-          "unavailable": "Pas de binaire whisper.cpp officiel pour macOS (ex. Homebrew : brew install whisper-cpp) ; build prévu dans deps.yml."
+          "unavailable": "Pas de binaire whisper.cpp officiel pour macOS (ex. Homebrew : brew install whisper-cpp) ; non fourni en v0.1.0."
         }
       }
     }
