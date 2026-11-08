@@ -1,0 +1,21 @@
+# Build
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+node_modules/
+dist/
+
+# Binaires tiers (téléchargés par scripts/CI, jamais commités)
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+
+# Fichiers perso / éditeurs / OS
+.env
+.env.*
+*.local
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+.claude/
