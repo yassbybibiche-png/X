@@ -137,7 +137,7 @@ fn fit_icon(img: DynamicImage) -> DynamicImage {
 }
 
 /// JPEG n'a pas de transparence : composition sur fond blanc.
-fn flatten_on_white(img: &DynamicImage) -> DynamicImage {
+pub(crate) fn flatten_on_white(img: &DynamicImage) -> DynamicImage {
     if !img.color().has_alpha() {
         return DynamicImage::ImageRgb8(img.to_rgb8());
     }

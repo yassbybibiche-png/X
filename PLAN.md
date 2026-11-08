@@ -116,26 +116,27 @@ il a été livré ; `Status::Phase1` dans le registre) ; **P2** = phase 2 (outil
 Rust + sidecars simples) ; **P3** = phase 3 (IA, OCR, téléchargement, cas
 complexes). Binaire « — » = pur Rust, aucun sidecar.
 
-### PDF (17)
+### PDF (18)
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
 | pdf-fusionner | — (lopdf) | ≥2 PDF → `<1er>-fusionne.pdf` | **P1** |
-| pdf-decouper | — (lopdf) | 1 PDF → 1 PDF par page / par plage | P2 |
-| pdf-extraire-pages | — (lopdf) | 1 PDF + plages → `-extrait.pdf` | P2 |
-| pdf-supprimer-pages | — (lopdf) | 1 PDF + plages → `-allege.pdf` | P2 |
-| pdf-pivoter | — (lopdf) | PDF + angle (+ pages) → `-pivote.pdf` | P2 |
+| pdf-decouper | — (lopdf) | 1 PDF → 1 PDF par page / par plage | **P1** |
+| pdf-extraire-pages | — (lopdf) | 1 PDF + plages → `-extrait.pdf` | **P1** |
+| pdf-supprimer-pages | — (lopdf) | 1 PDF + plages → `-allege.pdf` | **P1** |
+| pdf-pivoter | — (lopdf) | PDF + angle (+ pages) → `-pivote.pdf` | **P1** |
 | pdf-compresser | ghostscript | PDF + niveau (écran/ebook/impression) → `-compresse.pdf` | P2 |
 | pdf-ocr | ghostscript + tesseract | PDF scanné → PDF avec couche texte `-ocr.pdf` | P3 |
 | pdf-vers-images | ghostscript | PDF + DPI + format → PNG/JPG par page | P2 |
-| pdf-images-vers-pdf | — (image + lopdf) | images → `<1re>-images.pdf` | P2 |
+| pdf-images-vers-pdf | — (image + lopdf) | images → `<1re>-images.pdf` | **P1** |
 | pdf-proteger | — (lopdf, AES-256) / qpdf en secours | PDF + mot de passe → `-protege.pdf` | P2 |
 | pdf-deproteger | — (lopdf) / qpdf en secours | PDF + mot de passe → `-deprotege.pdf` | P2 |
 | pdf-filigrane | — (lopdf) | PDF + texte → `-filigrane.pdf` | P2 |
-| pdf-vers-texte | ghostscript (txtwrite) | PDF → `.txt` | P2 |
+| pdf-vers-texte | — (lopdf) | PDF → `.txt` (couche texte ; PDF scanné → OCR) | **P1** |
 | pdf-numeroter | — (lopdf) | PDF → `-numerote.pdf` | P3 |
 | pdf-niveaux-de-gris | ghostscript | PDF → `-gris.pdf` | P2 |
 | pdf-reparer | ghostscript | PDF abîmé → `-repare.pdf` | P3 |
 | pdf-supprimer-metadonnees | — (lopdf) | PDF → `-sans-metadonnees.pdf` | P2 |
+| pdf-infos | — (lopdf) | PDF → `-infos.txt` (pages, version, format, métadonnées) | **P1** |
 
 ### Documents (15) — pandoc, toujours `--sandbox`
 | id | binaire | entrées → sortie | statut |
@@ -220,9 +221,7 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | utilitaires-renommer-lot | — | fichiers + motif → copies renommées (jamais d'écrasement) | P3 |
 | utilitaires-qrcode | — (crate qrcode) | texte → .png | P3 |
 
-Total : 17 + 15 + 17 + 18 + 9 + 4 = **80**. Phase 1 : **4 outils fonctionnels**
-(les 3 exigés + l'empreinte SHA-256, quasi gratuite car `sha2` sert déjà au
-vérificateur de téléchargements).
+Total : 18 + 15 + 17 + 18 + 9 + 4 = **81** (80 prévus + `pdf-infos` ajouté en phase 2b).
 
 ---
 

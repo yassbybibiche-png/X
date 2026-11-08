@@ -47,7 +47,7 @@ pub fn merge(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
     Ok(vec![out.commit()])
 }
 
-fn load(path: &Path) -> Result<Document> {
+pub(crate) fn load(path: &Path) -> Result<Document> {
     let doc = Document::load(path).context("PDF illisible ou endommagé")?;
     if doc.is_encrypted() {
         bail!("PDF protégé par mot de passe : retirez d'abord la protection");
@@ -73,7 +73,7 @@ fn collect(path: &Path, acc: &mut Collected) -> Result<usize> {
 
 /// Copie du dictionnaire de page, complété des attributs hérités de ses parents
 /// (sinon ils seraient perdus, l'arbre /Pages d'origine étant remplacé).
-fn flattened_page(doc: &Document, id: ObjectId) -> Result<Dictionary> {
+pub(crate) fn flattened_page(doc: &Document, id: ObjectId) -> Result<Dictionary> {
     let mut page = doc.get_dictionary(id)?.clone();
     let mut parent = page.get(b"Parent").and_then(Object::as_reference).ok();
     let mut depth = 0;
@@ -162,7 +162,7 @@ fn new_catalog(obj: Object, pages_id: ObjectId) -> Result<Object> {
     Ok(Object::Dictionary(dict))
 }
 
-fn save(doc: &mut Document, file: std::fs::File) -> Result<()> {
+pub(crate) fn save(doc: &mut Document, file: std::fs::File) -> Result<()> {
     doc.compress();
     let mut writer = BufWriter::new(file);
     doc.save_to(&mut writer)

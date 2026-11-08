@@ -1,9 +1,11 @@
 //! Implémentations des outils. Seuls les outils listés dans [`implementation`]
-//! fonctionnent ; les autres renvoient l'erreur « non implémenté en phase 1 ».
+//! fonctionnent ; les autres renvoient l'erreur « pas encore implémenté ».
 
 pub mod archives;
 pub mod images;
 pub mod pdf;
+pub mod pdf_images;
+pub mod pdf_pages;
 pub mod utilitaires;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +20,13 @@ pub type ToolFn = fn(&ToolContext) -> Result<Vec<PathBuf>>;
 /// Outils réellement implémentés (id → fonction).
 const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("pdf-fusionner", pdf::merge),
+    ("pdf-decouper", pdf_pages::split),
+    ("pdf-extraire-pages", pdf_pages::extract_pages),
+    ("pdf-supprimer-pages", pdf_pages::delete_pages),
+    ("pdf-pivoter", pdf_pages::rotate),
+    ("pdf-vers-texte", pdf_pages::to_text),
+    ("pdf-infos", pdf_pages::info),
+    ("pdf-images-vers-pdf", pdf_images::images_to_pdf),
     ("images-convertir", images::convert),
     ("archives-creer-zip", archives::create_zip),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
@@ -27,7 +36,7 @@ pub fn implementation(id: &str) -> Option<ToolFn> {
     IMPLEMENTED.iter().find(|(k, _)| *k == id).map(|(_, f)| *f)
 }
 
-fn percent(done: usize, total: usize) -> f32 {
+pub(crate) fn percent(done: usize, total: usize) -> f32 {
     if total == 0 {
         return 100.0;
     }

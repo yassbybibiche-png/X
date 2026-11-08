@@ -42,6 +42,7 @@ pub const TOOLS: &[ToolDef] = &[
         input: single(PDF),
         output: "<nom>-p<N>.pdf (un par page ou plage)",
         options: &[PAGES],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -52,6 +53,7 @@ pub const TOOLS: &[ToolDef] = &[
         input: single(PDF),
         output: "<nom>-extrait.pdf",
         options: &[PAGES],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -62,6 +64,7 @@ pub const TOOLS: &[ToolDef] = &[
         input: single(PDF),
         output: "<nom>-allege.pdf",
         options: &[PAGES],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -95,6 +98,7 @@ pub const TOOLS: &[ToolDef] = &[
             },
             PAGES,
         ],
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -166,6 +170,7 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Assemble des images en un PDF, une image par page.",
         input: files(IMAGE_EXT),
         output: "<premiere>-images.pdf",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -207,10 +212,10 @@ pub const TOOLS: &[ToolDef] = &[
         id: "pdf-vers-texte",
         category: C,
         name: "PDF vers texte",
-        description: "Extrait le texte d'un PDF dans un fichier .txt.",
-        binaries: GS,
+        description: "Extrait la couche texte d'un PDF dans un fichier .txt (un PDF scanné nécessite l'OCR).",
         input: files(PDF),
         output: "<nom>.txt",
+        status: Status::Phase1,
         ..BASE
     },
     ToolDef {
@@ -251,6 +256,16 @@ pub const TOOLS: &[ToolDef] = &[
         description: "Efface auteur, logiciel, dates et métadonnées XMP d'un PDF.",
         input: files(PDF),
         output: "<nom>-sans-metadonnees.pdf",
+        ..BASE
+    },
+    ToolDef {
+        id: "pdf-infos",
+        category: C,
+        name: "Informations sur un PDF",
+        description: "Rapport texte : nombre de pages, version, format, chiffrement, titre, auteur, dates.",
+        input: files(PDF),
+        output: "<nom>-infos.txt",
+        status: Status::Phase1,
         ..BASE
     },
 ];

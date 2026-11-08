@@ -217,8 +217,8 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn registre_complet_80_outils() {
-        assert_eq!(all().len(), 80);
+    fn registre_complet() {
+        assert_eq!(all().len(), 81);
     }
 
     #[test]

@@ -103,3 +103,9 @@ Progression (une ligne par groupe) :
   « P1 » dans PLAN.md (= implémenté, testé, exécutable) ; corrige aussi le
   frontend qui attendait déjà `"phase1"` (le backend envoyait `"disponible"` →
   tous les outils auraient été grisés). fmt OK, clippy OK, `cargo test` 73/73.
+- Groupe PDF : `pdf-decouper`, `pdf-extraire-pages`, `pdf-supprimer-pages`,
+  `pdf-pivoter` (rotation héritée cumulée), `pdf-vers-texte` (couche texte
+  lopdf, avertissement si PDF scanné — Ghostscript n'est plus requis),
+  `pdf-images-vers-pdf` (A4 ajusté, transparence sur blanc), nouvel outil
+  `pdf-infos` (registre : 81 outils). Découpe : sorties validées seulement à la
+  fin (annulation/erreur → rien ne reste). fmt OK, clippy OK, test 87/87.
