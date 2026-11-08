@@ -314,3 +314,15 @@ Progression (une ligne par groupe) :
   `macos-15-intel`). `fetch_deps.py` testé localement (fichiers en cache
   reconnus). **GitHub Actions n'a pas pu être exécuté depuis cette VM** : aucun
   workflow n'a encore réellement tourné.
+- Groupe Utilitaires : `utilitaires_more` déclaré et relié au registre —
+  `utilitaires-verifier-sha256` (format `sha256sum` accepté), `-renommer-lot`
+  (motif `{n}`/`{nom}`/`{date}`, copies, originaux intacts), nouveaux outils
+  `-doublons` (taille puis SHA-256, rapport, rien supprimé), `-decouper`
+  (série `.001…` réservée en entier), `-reassembler` ; `utilitaires-qrcode`
+  (crate `qrcode` 0.14 sans fonctionnalités par défaut, rendu PNG par le crate
+  `image`, aucun appel réseau). Nouvelle fonction `output::reserve_exact`.
+  **Bug trouvé par le test** : une série renommée `film.mkv-2.001` n'était pas
+  retrouvée (`Path::with_extension` prenait `mkv-2` pour l'extension) → noms
+  construits par chaînes + `original_name`. Registre : 90 outils, Utilitaires
+  7/7 P1. Bibliothèques de dev GTK/WebKit réinstallées (même contournement
+  `libzstd-dev` qu'en phase 1). fmt OK, clippy OK, test 172/172.

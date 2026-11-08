@@ -122,6 +122,24 @@ pub fn reserve(dir: &Path, base: &str, ext: &str) -> Result<OutputFile> {
     )
 }
 
+/// Réserve exactement `dir/name` : `Ok(None)` si ce nom est déjà pris (jamais
+/// d'écrasement), pour les séries dont toutes les parties partagent une base.
+pub fn reserve_exact(dir: &Path, name: &str) -> Result<Option<OutputFile>> {
+    if name.contains(['/', '\\']) || name == ".." || name.is_empty() {
+        bail!("nom de sortie invalide : {name}");
+    }
+    let path = dir.join(name);
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(file) => Ok(Some(OutputFile {
+            path,
+            file: Some(file),
+            committed: false,
+        })),
+        Err(e) if e.kind() == ErrorKind::AlreadyExists => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("impossible de créer {}", path.display())),
+    }
+}
+
 /// Dossier de sortie réservé (créé vide par `create_dir`, atomique). En cas
 /// d'échec, il est supprimé avec son contenu (uniquement ce que l'outil y a écrit).
 #[derive(Debug)]

@@ -22,10 +22,12 @@ pub mod pdf_images;
 pub mod pdf_pages;
 pub mod pdf_qpdf;
 pub mod pdf_stamp;
+pub mod qrcode_gen;
 #[cfg(test)]
 pub mod testutil;
 pub mod transcribe;
 pub mod utilitaires;
+pub mod utilitaires_more;
 
 use std::path::{Path, PathBuf};
 
@@ -122,6 +124,15 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("archives-tester", archives_7z::test_archive),
     ("archives-ajouter", archives_7z::add_to_archive),
     ("utilitaires-empreinte-sha256", utilitaires::hash_files),
+    (
+        "utilitaires-verifier-sha256",
+        utilitaires_more::verify_sha256,
+    ),
+    ("utilitaires-renommer-lot", utilitaires_more::batch_rename),
+    ("utilitaires-doublons", utilitaires_more::duplicates),
+    ("utilitaires-decouper", utilitaires_more::split_file),
+    ("utilitaires-reassembler", utilitaires_more::join_files),
+    ("utilitaires-qrcode", qrcode_gen::generate),
 ];
 
 /// `images-optimiser-web` : JPEG (intégré) ou WebP avec perte (ImageMagick).

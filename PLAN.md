@@ -219,13 +219,16 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | archives-tester | 7zip | archive → rapport d'intégrité (journal) | **P1** |
 | archives-ajouter | 7zip | archive .7z/.zip/.tar + fichiers → `<nom>-complete.<ext>` (original intact ; ajouté en phase 3a) | **P1** |
 
-### Utilitaires (4)
+### Utilitaires (7)
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
 | utilitaires-empreinte-sha256 | — (sha2) | fichiers → `<nom>.sha256` | **P1** |
-| utilitaires-verifier-sha256 | — (sha2) | fichier + empreinte attendue → verdict | P2 |
-| utilitaires-renommer-lot | — | fichiers + motif → copies renommées (jamais d'écrasement) | P3 |
-| utilitaires-qrcode | — (crate qrcode) | texte → .png | P3 |
+| utilitaires-verifier-sha256 | — (sha2) | fichier + empreinte attendue (format `sha256sum` accepté) → verdict | **P1** |
+| utilitaires-renommer-lot | — | fichiers + motif `{n}`/`{nom}`/`{date}` → copies renommées (originaux intacts, jamais d'écrasement) | **P1** |
+| utilitaires-doublons | — (sha2) | fichiers/dossiers → `doublons.txt` (taille puis SHA-256 ; rien n'est supprimé ; ajouté en phase 3b) | **P1** |
+| utilitaires-decouper | — | fichier + taille en Mo → `<nom.ext>.001`… (série réservée en entier ; ajouté en phase 3b) | **P1** |
+| utilitaires-reassembler | — | `.001` (ou toutes les parties) → `<nom.ext>` (série contrôlée ; ajouté en phase 3b) | **P1** |
+| utilitaires-qrcode | — (crate qrcode) | texte/lien + correction + taille → `Images/qrcode.png` (aucun appel réseau) | **P1** |
 
 Total : 18 + 15 + 17 + 19 + 9 + 4 = **82** (80 prévus + `pdf-infos` et `video-infos`
 ajoutés en phase 2b).
