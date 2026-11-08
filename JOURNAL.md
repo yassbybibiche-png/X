@@ -388,3 +388,7 @@ Progression (une ligne par groupe) :
   exfiltration n'a pu être **reproduite** sans ce garde-fou (ffmpeg 6.1.1
   épinglé et 8.1.2 refusent déjà une playlist HLS déguisée en .mp4/.mkv/.srt…) ;
   c'est une défense en profondeur. fmt OK, clippy OK, test 176/176.
+- Correctif d'audit (CI) : `release.yml` interpolait `${{ github.ref_name }}`
+  directement dans des scripts shell (motif d'injection de script GitHub
+  Actions) → passé par variables d'environnement (`TAG`, `PLATFORM`,
+  `PATTERN`, `REPO`). actionlint 1.7.12 : 0 trouvaille.

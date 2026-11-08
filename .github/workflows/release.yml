@@ -128,15 +128,18 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PLATFORM: ${{ matrix.platform }}
+          PATTERN: ${{ matrix.pattern }}
         run: |
           shopt -s nullglob
-          files=(src-tauri/target/release/bundle/*/${{ matrix.pattern }})
-          [ ${#files[@]} -gt 0 ] || { echo "aucun installeur ${{ matrix.pattern }} produit"; exit 1; }
+          files=(src-tauri/target/release/bundle/*/$PATTERN)
+          [ ${#files[@]} -gt 0 ] || { echo "aucun installeur $PATTERN produit"; exit 1; }
           for f in "${files[@]}"; do
             # Nom explicite par plateforme (les deux .dmg auraient sinon le même nom).
-            name="Boite-a-outils_${{ github.ref_name }}_${{ matrix.platform }}.${f##*.}"
+            name="Boite-a-outils_${TAG}_${PLATFORM}.${f##*.}"
             cp "$f" "$name"
-            gh release upload "${{ github.ref_name }}" "$name" --clobber
+            gh release upload "$TAG" "$name" --clobber
           done
 
   publish:
@@ -147,4 +150,6 @@ jobs:
       - name: Retirer le statut brouillon
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: gh release edit "$TAG" --repo "$REPO" --draft=false
