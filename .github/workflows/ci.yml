@@ -1,0 +1,70 @@
+# Contrôles à chaque push / PR : formatage, clippy strict, tests.
+# Aucun binaire tiers n'est téléchargé ici : les tests n'en dépendent pas
+# (fixtures générées ; les tests « réels » sont ignorés si le binaire manque).
+#
+# Choix : tests complets sous Linux seulement ; Windows et macOS font un
+# `cargo check --all-targets` (compilation de l'app Tauri et des tests sans les
+# exécuter) — le build complet + bundle de ces OS est fait par release.yml.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: fmt + clippy + tests (Linux)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances système Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev xz-utils
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - name: Syntaxe du frontend
+        working-directory: src
+        run: node --check main.js
+
+  check:
+    name: cargo check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo check --all-targets

@@ -285,3 +285,32 @@ Progression (une ligne par groupe) :
   7-Zip 26.06 installé depuis le manifeste (fichier de `.scratch/dl`, SHA-256
   vérifié) : les tests Archives tournent désormais avec 7zz 26.06. (crates.io et
   GitHub injoignables à ce moment : pas de nouvelle dépendance.) test 166/166.
+
+## 2026-11-08 — Phase 3b (finale)
+
+Reprise : la session 3a a été tuée sans bilan ; `utilitaires_more.rs` (non
+commité) récupéré tel quel. **La VM a été réinitialisée** au redémarrage : les
+paquets système installés en 3a (bibliothèques de dev GTK/WebKit, Ghostscript,
+Tesseract, ImageMagick, 7-Zip, pandoc, qpdf, yt-dlp système) ont disparu ; seuls
+ffmpeg et `.scratch/appdata/bin` (typst, qpdf 12.4.2, pandoc 3.13, 7zz 26.06,
+yt-dlp, whisper-cli, Real-ESRGAN) restent. Sans `libwebkit2gtk-4.1-dev`,
+`cargo test` ne peut plus **lier** (clippy, qui ne lie pas, passe) :
+réinstallation par apt en cours (miroir très lent).
+
+Progression (une ligne par groupe) :
+- Groupe CI : `.github/workflows/ci.yml` (push/PR : fmt `--check`, clippy
+  `-D warnings`, tests sous Linux ; `cargo check --all-targets` sous Windows et
+  macOS — le build complet + bundle de ces OS est dans release.yml, trop lourd
+  pour chaque push ; cache `Swatinem/rust-cache`), `deps.yml` (manuel +
+  hebdomadaire + changement du manifeste ; `scripts/fetch_deps.py` télécharge,
+  vérifie taille + SHA-256 ; `actions/cache`, clé = OS/plateforme +
+  `hashFiles('scripts/deps.lock.json')`), `release.yml` (tag `v*` : brouillon,
+  4 builds .msi / .dmg Intel (`macos-15-intel`) / .dmg Apple Silicon /
+  .AppImage (Ubuntu 22.04), 4 installeurs joints puis publication ; 7-Zip
+  inclus en sidecar via `tauri.bundle-unix.json` / `tauri.bundle-windows.json`,
+  pris dans le cache deps — seul 7-Zip est téléchargé si le cache est froid),
+  `smoke.yml` (lourd : manuel ou tag `v*-rc*` seulement). YAML valide (PyYAML) ;
+  `actionlint` 1.7.12 → 0 trouvaille (1.7.7 ne connaissait pas encore le label
+  `macos-15-intel`). `fetch_deps.py` testé localement (fichiers en cache
+  reconnus). **GitHub Actions n'a pas pu être exécuté depuis cette VM** : aucun
+  workflow n'a encore réellement tourné.

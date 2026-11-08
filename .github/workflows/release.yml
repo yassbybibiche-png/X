@@ -1,0 +1,146 @@
+# Release déclenchée par un tag `v*` (ex. `git tag v0.1.0 && git push origin v0.1.0`).
+# 4 installeurs : Windows x64 (.msi), macOS Intel et Apple Silicon (.dmg),
+# Linux x64 (.AppImage), attachés à une release GitHub créée en brouillon puis
+# publiée quand les 4 builds ont réussi.
+#
+# Seul 7-Zip (~2 Mo) est inclus dans l'installeur (sidecar Tauri, voir
+# PLAN.md §3.3) ; les autres binaires sont téléchargés par l'app au premier
+# usage. 7-Zip vient du cache de deps.yml (restauré, jamais réécrit ici) ; en
+# cas d'absence du cache, seul 7-Zip est téléchargé — jamais ~1 Go.
+#
+# Pas de smoke test lourd ici : voir smoke.yml (manuel / pré-release).
+# Aucun secret autre que GITHUB_TOKEN ; applications non signées (voir README).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create:
+    name: Créer la release (brouillon)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Brouillon de release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" --draft $prerelease --verify-tag \
+            --title "Boîte à outils $TAG" \
+            --notes "Installeurs : Windows (.msi), macOS Intel et Apple Silicon (.dmg), Linux (.AppImage). Voir le README pour le premier lancement (macOS : Gatekeeper)."
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: create
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            triple: x86_64-pc-windows-msvc
+            bundle: msi
+            pattern: "*.msi"
+          - os: macos-15-intel
+            platform: macos-x64
+            triple: x86_64-apple-darwin
+            bundle: dmg
+            pattern: "*.dmg"
+          - os: macos-latest
+            platform: macos-arm64
+            triple: aarch64-apple-darwin
+            bundle: dmg
+            pattern: "*.dmg"
+          - os: ubuntu-22.04 # glibc plus ancienne = AppImage compatible avec plus de distributions
+            platform: linux-x64
+            triple: x86_64-unknown-linux-gnu
+            bundle: appimage
+            pattern: "*.AppImage"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances système Tauri (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev patchelf file
+      - name: 7-Zip du runner dans le PATH (Windows, pour extraire l'installeur 7-Zip officiel)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "C:\\Program Files\\7-Zip" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-${{ matrix.platform }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restaurer le cache des binaires (deps.yml)
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/dl
+          key: deps-${{ matrix.platform }}-${{ hashFiles('scripts/deps.lock.json') }}
+      - name: 7-Zip (vérifié SHA-256 ; téléchargé seulement s'il manque au cache)
+        run: python scripts/fetch_deps.py --platform ${{ matrix.platform }} --dest deps/dl --only 7zip
+      - name: Installer 7-Zip avec le code de l'app puis le placer en sidecar
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          exe="$(cargo run --quiet --example installer -- 7zip ../deps/bin --depuis ../deps/dl)"
+          echo "7-Zip installé : $exe"
+          mkdir -p binaries
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "$exe" "binaries/7z-${{ matrix.triple }}.exe"
+            cp "$(dirname "$exe")/7z.dll" binaries/7z.dll
+          else
+            cp "$exe" "binaries/7zz-${{ matrix.triple }}"
+            chmod +x "binaries/7zz-${{ matrix.triple }}"
+          fi
+      - name: Build Tauri
+        shell: bash
+        run: |
+          overlay=src-tauri/tauri.bundle-unix.json
+          [ "${{ runner.os }}" = "Windows" ] && overlay=src-tauri/tauri.bundle-windows.json
+          npx tauri build --bundles ${{ matrix.bundle }} --config "$overlay"
+      - name: Joindre l'installeur à la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(src-tauri/target/release/bundle/*/${{ matrix.pattern }})
+          [ ${#files[@]} -gt 0 ] || { echo "aucun installeur ${{ matrix.pattern }} produit"; exit 1; }
+          for f in "${files[@]}"; do
+            # Nom explicite par plateforme (les deux .dmg auraient sinon le même nom).
+            name="Boite-a-outils_${{ github.ref_name }}_${{ matrix.platform }}.${f##*.}"
+            cp "$f" "$name"
+            gh release upload "${{ github.ref_name }}" "$name" --clobber
+          done
+
+  publish:
+    name: Publier la release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Retirer le statut brouillon
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false

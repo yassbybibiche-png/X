@@ -1,0 +1,73 @@
+# Smoke test LOURD : installe chaque binaire tiers disponible avec le vrai
+# code de l'app (SHA-256 + extraction sûre) puis lance les tests « réels ».
+# Uniquement à la main (workflow_dispatch) ou sur tag de pré-release
+# (`v0.2.0-rc1`…) — JAMAIS à chaque push. Fichiers servis par le cache de
+# deps.yml (restauré, jamais retéléchargés s'il est chaud).
+name: Smoke test (lourd)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*-rc*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    name: smoke ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x64, tests: true }
+          - { os: macos-latest, platform: macos-arm64, tests: true }
+          - { os: windows-latest, platform: windows-x64, tests: false }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances système (Linux) + binaires sans build portable officiel
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev xz-utils \
+            ghostscript tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng
+      - name: 7-Zip du runner dans le PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "C:\\Program Files\\7-Zip" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache/restore@v4
+        with:
+          path: deps/dl
+          key: deps-${{ matrix.platform }}-${{ hashFiles('scripts/deps.lock.json') }}
+      - name: Compléter les fichiers manquants (vérifiés SHA-256)
+        run: python scripts/fetch_deps.py --platform ${{ matrix.platform }} --dest deps/dl
+      - name: Installer chaque binaire disponible avec le code de l'app
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          mkdir -p ../.scratch/appdata/bin
+          for id in 7zip ghostscript tesseract ffmpeg imagemagick pandoc typst yt-dlp qpdf realesrgan whisper; do
+            echo "== $id"
+            cargo run --quiet --example installer -- "$id" ../.scratch/appdata/bin --depuis ../deps/dl \
+              || echo "::warning::$id non installé sur ${{ matrix.platform }} (voir le journal)"
+          done
+      - name: Diagnostic
+        working-directory: src-tauri
+        run: cargo run --quiet --example diagnostic
+      - name: Tests réels
+        if: matrix.tests
+        working-directory: src-tauri
+        run: cargo test -- --nocapture
