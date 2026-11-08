@@ -381,3 +381,10 @@ Progression (une ligne par groupe) :
   progression) ou, si X n'est pas téléchargeable sur ce système, la raison du
   manifeste (quoi installer : paquet, Homebrew…). `node --check` OK ; non testé
   graphiquement (VM sans GUI).
+- Durcissement d'audit (réseau) : `sidecar::run_with` ajoute
+  `-protocol_whitelist file,pipe` avant chaque `-i` de ffmpeg (et en tête pour
+  ffprobe) : aucun outil ne peut faire ouvrir une URL à ffmpeg. Test réel :
+  ffmpeg refuse `http://…` (« not on whitelist »). Honnêteté : aucune
+  exfiltration n'a pu être **reproduite** sans ce garde-fou (ffmpeg 6.1.1
+  épinglé et 8.1.2 refusent déjà une playlist HLS déguisée en .mp4/.mkv/.srt…) ;
+  c'est une défense en profondeur. fmt OK, clippy OK, test 176/176.

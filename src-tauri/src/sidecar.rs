@@ -440,7 +440,8 @@ pub fn run_with<S: AsRef<OsStr>>(
     args: &[S],
     opts: RunOptions,
 ) -> Result<RunOutput> {
-    let mut child = spawn(program, args, &opts)?;
+    let args = without_network(program, args);
+    let mut child = spawn(program, &args, &opts)?;
     let out_pipe = child.stdout.take();
     let err_pipe = child.stderr.take();
     let in_pipe = child.stdin.take();
@@ -463,6 +464,31 @@ pub fn run_with<S: AsRef<OsStr>>(
             stderr,
         })
     })
+}
+
+/// Protocoles autorisés pour les entrées de ffmpeg / ffprobe.
+const MEDIA_PROTOCOLS: &str = "file,pipe";
+
+/// Interdit le réseau aux entrées de ffmpeg / ffprobe : un fichier déposé qui
+/// est en réalité une playlist (HLS `#EXTM3U`, `concat`…) pourrait sinon faire
+/// contacter des serveurs (pistage, exfiltration). `-protocol_whitelist` est
+/// ajouté avant chaque `-i` (ffmpeg) ou en tête (ffprobe, entrée positionnelle).
+pub fn without_network<S: AsRef<OsStr>>(program: &Path, args: &[S]) -> Vec<OsString> {
+    let stem = program
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let mut out = Vec::with_capacity(args.len() + 4);
+    if stem == "ffprobe" {
+        out.extend(["-protocol_whitelist".into(), MEDIA_PROTOCOLS.into()]);
+    }
+    for a in args {
+        if stem == "ffmpeg" && a.as_ref() == "-i" {
+            out.extend(["-protocol_whitelist".into(), MEDIA_PROTOCOLS.into()]);
+        }
+        out.push(a.as_ref().to_owned());
+    }
+    out
 }
 
 fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], opts: &RunOptions) -> Result<Child> {
@@ -783,6 +809,48 @@ mod tests {
         assert!(win.contains(&pf.join("ImageMagick-7.1.2-Q16-HDRI")));
         assert!(win.contains(&local.join("Pandoc")));
         assert_eq!(win.iter().filter(|d| **d == pf.join("7-Zip")).count(), 1);
+    }
+
+    #[test]
+    fn ffmpeg_sans_reseau() {
+        let args = without_network(
+            Path::new("/x/ffmpeg.exe"),
+            &["-y", "-i", "a.mp4", "-i", "b.srt", "o.mp4"],
+        );
+        let pl = ["-protocol_whitelist", MEDIA_PROTOCOLS];
+        let expected: Vec<OsString> = ["-y"]
+            .iter()
+            .chain(&pl)
+            .chain(&["-i", "a.mp4"])
+            .chain(&pl)
+            .chain(&["-i", "b.srt", "o.mp4"])
+            .map(OsString::from)
+            .collect();
+        assert_eq!(args, expected);
+        assert_eq!(
+            without_network(Path::new("ffprobe"), &["f.mkv"])[..2],
+            pl.map(OsString::from)
+        );
+        assert_eq!(
+            without_network(Path::new("gs"), &["-i"]),
+            vec![OsString::from("-i")]
+        );
+    }
+
+    /// Le vrai ffmpeg refuse toute entrée réseau, même passée explicitement.
+    #[test]
+    fn ffmpeg_reel_refuse_le_reseau() {
+        let Some(r) = crate::tools::testutil::real(&[Binary::Ffmpeg]) else {
+            return;
+        };
+        let ffmpeg = r.resolve(Binary::Ffmpeg).unwrap().path;
+        let out = run(
+            &ffmpeg,
+            &["-hide_banner", "-i", "http://127.0.0.1:9/pistage.ts"],
+            Duration::from_secs(30),
+        )
+        .unwrap();
+        assert!(out.stderr.contains("not on whitelist"), "{}", out.stderr);
     }
 
     /// Les AppImage (ImageMagick Linux) doivent tourner sans FUSE.
