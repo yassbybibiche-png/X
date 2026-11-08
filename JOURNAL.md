@@ -338,3 +338,11 @@ Progression (une ligne par groupe) :
   Rust : 516 paquets, licences permissives (+ MPL-2.0 pour 5 paquets CSS de
   Tauri). Ghostscript 10.02.1, Tesseract 5.3.4, ImageMagick 6.9.12 réinstallés
   par apt → test 172/172, aucun test réel ignoré.
+- Correctif d'audit (AppImage) : l'ImageMagick Linux du manifeste est une
+  AppImage, qui **échouait** sur une machine sans FUSE (cas d'Ubuntu 24.04 par
+  défaut : « No suitable fusermount binary found ») — les tests 3a utilisaient
+  le `convert` v6 du système et ne l'avaient pas vu. `sidecar::spawn` passe
+  désormais `APPIMAGE_EXTRACT_AND_RUN=1` (sans effet sur les autres binaires).
+  ImageMagick 7.1.2-35 installé par l'installeur de l'app dans `.scratch` : les
+  tests réels ImageMagick tournent maintenant avec l'AppImage (vérifié : sans la
+  variable, 2 tests échouent ; avec, ils passent). test 173/173.

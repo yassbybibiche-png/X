@@ -415,6 +415,10 @@ fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], opts: &RunOptions) -> Resu
     } else {
         Stdio::null()
     };
+    // Les AppImage téléchargées (ImageMagick Linux) exigent FUSE, absent par
+    // défaut sur beaucoup de distributions (Ubuntu 24.04 : pas de libfuse2) :
+    // cette variable les fait s'auto-extraire. Sans effet sur les autres binaires.
+    cmd.env("APPIMAGE_EXTRACT_AND_RUN", "1");
     cmd.args(args)
         .stdin(stdin)
         .stdout(Stdio::piped())
@@ -689,6 +693,19 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), Binary::ALL.len());
         assert!(Binary::ALL.iter().all(|b| !b.candidates().is_empty()));
+    }
+
+    /// Les AppImage (ImageMagick Linux) doivent tourner sans FUSE.
+    #[cfg(unix)]
+    #[test]
+    fn appimage_sans_fuse() {
+        let out = run(
+            Path::new("/usr/bin/env"),
+            &[] as &[&str],
+            Duration::from_secs(10),
+        )
+        .unwrap();
+        assert!(out.stdout.contains("APPIMAGE_EXTRACT_AND_RUN=1"));
     }
 
     #[cfg(unix)]
