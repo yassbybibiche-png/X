@@ -402,3 +402,47 @@ Progression (une ligne par groupe) :
   unique, sorties `create_new`, un seul client HTTP, aucun secret / e-mail /
   chemin perso), risques résiduels classés (Windows/macOS et CI jamais
   exécutés en tête).
+
+### Bilan final phase 3b (2026-11-08)
+
+**Outils exécutables** (vrai programme ou pur Rust, testés de bout en bout sur la
+VM Linux) : PDF 18/18, Documents 15/15, Images 17/18, Vidéo/audio 18/22,
+Archives 10/10, Utilitaires 7/7 → **85 pour un objectif de 80** (90 au
+registre). Non validés et pourquoi : PLAN.md §5.2 ; disponibilité par OS :
+§5.3.
+
+Commandes finales (dans `src-tauri/`) :
+- `cargo fmt --check` → code 0.
+- `cargo clippy --all-targets -- -D warnings` → code 0, 0 avertissement.
+- `cargo test` → code 0 : 176 passés, 0 échec (lib) ; 0 test dans main et
+  doctests. Tous les tests « réels » ont tourné (Ghostscript 10.02.1,
+  Tesseract 5.3.4, ImageMagick 7.1.2-35 AppImage, 7zz 26.06, pandoc 3.13,
+  typst 0.15.1, qpdf 12.4.2, ffmpeg 8.1.2) ; aucun n'a été ignoré.
+- `node --check src/main.js` → OK. actionlint 1.7.12 → 0 trouvaille.
+- `git grep` e-mails / chemins perso / secrets → rien (hors texte d'AUDIT.md
+  décrivant la recherche).
+
+Aucune commande n'a dépassé 10 minutes (les `apt-get` de remise en état de la
+VM ont été lancés en arrière-plan). Ordre des commits : le groupe CI a été
+commité avant les Utilitaires, faute de pouvoir lier les tests tant que les
+bibliothèques GTK/WebKit n'étaient pas réinstallées.
+
+Ce qui marche : 85 outils réellement testés ; téléchargement au premier usage
+(SHA-256) ; 7-Zip inclus dans les installeurs ; pandoc toujours `--sandbox` ;
+ffmpeg sans réseau ; aucune sortie écrasante ; résolution Homebrew / Program
+Files ; CI complète écrite et validée syntaxiquement.
+
+Ce qui reste : exécuter la CI (jamais lancée d'ici) puis `smoke.yml` à la main ;
+essais réels Windows et macOS ; épingler les SHA-256 des modèles whisper ;
+builds `deps.yml` de Ghostscript/Tesseract/ImageMagick/whisper pour macOS (et
+Ghostscript/Tesseract Linux) ; signature des installeurs ; vraies captures
+d'écran (`docs/captures/`) ; mise à jour yt-dlp au-delà de la version épinglée.
+Détail : AUDIT.md §3.
+
+**Publier la release v0.1.0** (depuis un clone poussé sur GitHub) :
+1. Actions › « Binaires tiers » › *Run workflow* (remplit le cache ; facultatif,
+   la release ne télécharge sinon que 7-Zip) ; idéalement « Smoke test » aussi.
+2. `git tag v0.1.0 && git push origin v0.1.0` → `release.yml` crée le brouillon,
+   construit les 4 installeurs, les joint et publie la release.
+3. Vérifier la page Releases : `…_windows-x64.msi`, `…_macos-x64.dmg`,
+   `…_macos-arm64.dmg`, `…_linux-x64.AppImage`.
