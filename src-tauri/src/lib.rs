@@ -7,11 +7,13 @@ pub mod commands;
 pub mod download;
 pub mod extract;
 pub mod jobs;
+pub mod models;
 pub mod output;
 pub mod registry;
 pub mod sidecar;
 pub mod timeutil;
 pub mod tools;
+pub mod ytdlp;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,7 +25,8 @@ pub fn run() {
             commands::check_tools,
             commands::run_tool,
             commands::cancel_job,
-            commands::download_binary
+            commands::download_binary,
+            commands::check_ytdlp_update
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de l'application");

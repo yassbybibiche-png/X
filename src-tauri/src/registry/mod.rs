@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn registre_complet() {
-        assert_eq!(all().len(), 83);
+        assert_eq!(all().len(), 86);
     }
 
     #[test]

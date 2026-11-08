@@ -226,3 +226,25 @@ Progression (une ligne par groupe) :
   la VM : « vkCreateInstance failed »), repli Lanczos ×4 **signalé**
   (`-x4-lanczos.png`) ; chemin IA testé avec un faux binaire (arguments,
   modèles, progression). Images 18/18. fmt OK, clippy OK, test 145/145.
+- Groupe Vidéo/audio : `video-vers-gif` (palette une passe), `video-redimensionner`
+  (jamais d'agrandissement), `video-pivoter`, `video-accelerer` (setpts + atempo
+  chaîné), `audio-normaliser` (loudnorm), `video-incruster-sous-titres` (libass ;
+  sous-titres copiés sous un nom fixe dans un dossier de travail → aucun chemin
+  utilisateur dans le filtre), nouveaux outils `video-concatener` (taille de la
+  1re, silence ajouté si une vidéo n'a pas de son), `video-vignettes` (planche),
+  `video-extraire-sous-titres` (pistes texte ; image → avertissement) — registre :
+  86. Tous testés avec le **vrai** ffmpeg 8.1.2. whisper : `video-sous-titres`
+  (SRT/VTT) et `audio-transcrire` (TXT), WAV 16 kHz par ffmpeg, progression `-pp`.
+  `whisper-cli` 1.9.5 épinglé (linux/windows, empreintes GitHub) et installé dans
+  `.scratch` : il tourne, mais le **modèle** manque (Hugging Face injoignable
+  depuis la VM : SHA-256 non épinglé, entrée `models` « unavailable » avec la
+  raison ; message clair testé avec le vrai binaire). Câblage complet testé avec
+  un faux whisper-cli + modèle factice. yt-dlp : `video-telecharger` /
+  `audio-telecharger` (URL http/https validée et passée après `--`,
+  `--ignore-config`, `--no-playlist` par défaut, dossier de travail dans
+  Téléchargements puis noms réservés → jamais d'écrasement), testés avec un faux
+  yt-dlp (aucun téléchargement réel). Nouvelle commande `check_ytdlp_update` +
+  bouton « Vérifier la mise à jour » / « Mettre à jour vers … » dans le
+  Diagnostic : testée avec le vrai yt-dlp 2024.04.09 (mise à jour 2026.10.26
+  proposée). Modèles whisper visibles dans le Diagnostic. Vidéo/audio 22/22.
+  fmt OK, clippy OK, test 157/157.

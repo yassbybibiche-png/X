@@ -90,6 +90,79 @@ const CUT: &[OptionDef] = &[
     choice("precision", "Précision", PRECISION, "precise"),
 ];
 
+const fn num(
+    key: &'static str,
+    label: &'static str,
+    (min, max): (f64, f64),
+    default: &'static str,
+) -> OptionDef {
+    OptionDef {
+        key,
+        label,
+        kind: OptionKind::Number {
+            min,
+            max,
+            step: 1.0,
+        },
+        default,
+    }
+}
+const SUB_FORMATS: &[Choice] = &[
+    c("srt", "SRT"),
+    c("vtt", "WebVTT"),
+    c("srt+vtt", "SRT + WebVTT"),
+];
+const LANGS: &[Choice] = &[
+    c("auto", "Détection automatique"),
+    c("fr", "Français"),
+    c("en", "Anglais"),
+];
+const WHISPER_MODELS: &[Choice] = &[
+    c("small", "small (précis, ≈ 190 Mo)"),
+    c("base", "base (rapide, ≈ 60 Mo)"),
+];
+const HEIGHTS: &[Choice] = &[
+    c("2160", "2160p (4K)"),
+    c("1080", "1080p"),
+    c("720", "720p"),
+    c("480", "480p"),
+    c("360", "360p"),
+];
+const ANGLES: &[Choice] = &[
+    c("90", "90° (horaire)"),
+    c("180", "180°"),
+    c("270", "270° (anti-horaire)"),
+];
+const SPEEDS: &[Choice] = &[
+    c("0.25", "×0,25"),
+    c("0.5", "×0,5"),
+    c("0.75", "×0,75"),
+    c("1.25", "×1,25"),
+    c("1.5", "×1,5"),
+    c("2", "×2"),
+    c("3", "×3"),
+    c("4", "×4"),
+];
+const QUALITIES: &[Choice] = &[
+    c("meilleure", "La meilleure disponible"),
+    c("1080", "1080p max."),
+    c("720", "720p max."),
+    c("480", "480p max."),
+    c("360", "360p max."),
+];
+const DL_AUDIO: &[Choice] = &[c("mp3", "MP3"), c("m4a", "M4A (AAC)"), c("opus", "Opus")];
+const GRIDS: &[Choice] = &[c("3x2", "3 × 2"), c("4x3", "4 × 3"), c("5x4", "5 × 4")];
+const PLAYLIST: OptionDef = OptionDef {
+    key: "playlist",
+    label: "Toute la playlist (sinon la vidéo seule)",
+    kind: OptionKind::Bool,
+    default: "false",
+};
+const DEST: OptionDef = text("dossier", "Dossier (vide = Téléchargements)", "");
+const V_AND_SUBS: &[&str] = &[
+    "mp4", "mkv", "mov", "avi", "webm", "m4v", "wmv", "flv", "mpg", "mpeg", "srt", "vtt", "ass",
+];
+
 const fn ready(tool: ToolDef, options: &'static [OptionDef]) -> ToolDef {
     ToolDef {
         options,
@@ -151,12 +224,20 @@ pub const TOOLS: &[ToolDef] = &[
         ),
         &[choice("format", "Format", EXTRACT_FORMATS, "mp3")],
     ),
-    ff(
-        "video-vers-gif",
-        "Vidéo vers GIF",
-        "Crée un GIF animé (palette optimisée) d'un extrait.",
-        V,
-        "<nom>.gif",
+    ready(
+        ff(
+            "video-vers-gif",
+            "Vidéo vers GIF",
+            "Crée un GIF animé (palette optimisée) d'un extrait.",
+            V,
+            "<nom>.gif",
+        ),
+        &[
+            text("debut", "Début (ex. 1:30 ou 90)", "0"),
+            text("fin", "Fin (vide = jusqu'au bout)", "10"),
+            num("fps", "Images par seconde", (1.0, 30.0), "10"),
+            num("largeur", "Largeur (px)", (32.0, 1920.0), "480"),
+        ],
     ),
     ready(
         ff(
@@ -170,38 +251,57 @@ pub const TOOLS: &[ToolDef] = &[
     ),
     ToolDef {
         binaries: WHISPER,
-        status: Status::Phase3,
-        ..ff(
-            "video-sous-titres",
-            "Sous-titres automatiques",
-            "Transcrit la parole en sous-titres .srt avec whisper (local).",
-            V,
-            "<nom>.srt",
+        input: files(MEDIA_EXT),
+        ..ready(
+            ff(
+                "video-sous-titres",
+                "Sous-titres automatiques",
+                "Transcrit la parole en sous-titres SRT et/ou WebVTT avec whisper (local, rien ne quitte la machine).",
+                V,
+                "<nom>.srt / <nom>.vtt",
+            ),
+            &[
+                choice("format", "Format", SUB_FORMATS, "srt"),
+                choice("langue", "Langue parlée", LANGS, "auto"),
+                choice("modele", "Modèle", WHISPER_MODELS, "small"),
+            ],
         )
     },
     ToolDef {
-        status: Status::Phase3,
-        ..ff(
-            "video-incruster-sous-titres",
-            "Incruster des sous-titres",
-            "Grave un fichier .srt dans l'image.",
-            V,
-            "<nom>-soustitre.mp4",
+        input: super::InputSpec {
+            min_files: 2,
+            ..files(V_AND_SUBS)
+        },
+        ..ready(
+            ff(
+                "video-incruster-sous-titres",
+                "Incruster des sous-titres",
+                "Grave un fichier .srt/.vtt/.ass dans l'image (choisissez la vidéo ET le fichier de sous-titres).",
+                V,
+                "<nom>-soustitre.mp4",
+            ),
+            &[],
         )
     },
-    ff(
-        "video-redimensionner",
-        "Redimensionner une vidéo",
-        "Change la définition (1080p, 720p, 480p…).",
-        V,
-        "<nom>-<hauteur>p.<ext>",
+    ready(
+        ff(
+            "video-redimensionner",
+            "Redimensionner une vidéo",
+            "Change la définition (1080p, 720p, 480p…), sans jamais agrandir.",
+            V,
+            "<nom>-<hauteur>p.<ext>",
+        ),
+        &[choice("hauteur", "Hauteur", HEIGHTS, "720")],
     ),
-    ff(
-        "video-pivoter",
-        "Pivoter une vidéo",
-        "Fait pivoter de 90, 180 ou 270 degrés.",
-        V,
-        "<nom>-pivote.<ext>",
+    ready(
+        ff(
+            "video-pivoter",
+            "Pivoter une vidéo",
+            "Fait pivoter de 90, 180 ou 270 degrés.",
+            V,
+            "<nom>-pivote.<ext>",
+        ),
+        &[choice("angle", "Angle", ANGLES, "90")],
     ),
     ready(
         ff(
@@ -213,38 +313,52 @@ pub const TOOLS: &[ToolDef] = &[
         ),
         &[],
     ),
-    ToolDef {
-        status: Status::Phase3,
-        ..ff(
+    ready(
+        ff(
             "video-accelerer",
             "Accélérer / ralentir",
             "Change la vitesse de lecture (image et son).",
             V,
             "<nom>-x<facteur>.<ext>",
+        ),
+        &[choice("facteur", "Vitesse", SPEEDS, "2")],
+    ),
+    ToolDef {
+        binaries: YTDLP,
+        input: TEXT_INPUT,
+        ..ready(
+            ff(
+                "video-telecharger",
+                "Télécharger une vidéo",
+                "Télécharge une vidéo depuis une URL (yt-dlp), qualité au choix. Seul outil qui utilise Internet.",
+                &[],
+                "Téléchargements/<titre> [<id>].<ext>",
+            ),
+            &[
+                text("url", "Adresse (https://…)", ""),
+                choice("qualite", "Qualité", QUALITIES, "1080"),
+                PLAYLIST,
+                DEST,
+            ],
         )
     },
     ToolDef {
         binaries: YTDLP,
         input: TEXT_INPUT,
-        status: Status::Phase3,
-        ..ff(
-            "video-telecharger",
-            "Télécharger une vidéo",
-            "Télécharge une vidéo depuis une URL (yt-dlp), qualité au choix.",
-            &[],
-            "Téléchargements/<titre>.<ext>",
-        )
-    },
-    ToolDef {
-        binaries: YTDLP,
-        input: TEXT_INPUT,
-        status: Status::Phase3,
-        ..ff(
-            "audio-telecharger",
-            "Télécharger l'audio",
-            "Télécharge uniquement le son depuis une URL (yt-dlp).",
-            &[],
-            "Téléchargements/<titre>.mp3",
+        ..ready(
+            ff(
+                "audio-telecharger",
+                "Télécharger l'audio",
+                "Télécharge uniquement le son depuis une URL (yt-dlp). Seul outil qui utilise Internet.",
+                &[],
+                "Téléchargements/<titre> [<id>].mp3",
+            ),
+            &[
+                text("url", "Adresse (https://…)", ""),
+                choice("format", "Format", DL_AUDIO, "mp3"),
+                PLAYLIST,
+                DEST,
+            ],
         )
     },
     ready(
@@ -267,24 +381,69 @@ pub const TOOLS: &[ToolDef] = &[
         ),
         CUT,
     ),
-    ff(
-        "audio-normaliser",
-        "Normaliser le volume",
-        "Égalise le volume perçu (EBU R128, filtre loudnorm).",
-        A,
-        "<nom>-normalise.<ext>",
+    ready(
+        ff(
+            "audio-normaliser",
+            "Normaliser le volume",
+            "Égalise le volume perçu (EBU R128, −16 LUFS, filtre loudnorm).",
+            A,
+            "<nom>-normalise.<ext>",
+        ),
+        &[],
     ),
     ToolDef {
         binaries: WHISPER,
-        status: Status::Phase3,
-        ..ff(
-            "audio-transcrire",
-            "Transcrire un audio",
-            "Transcrit la parole en texte avec whisper (local).",
-            A,
-            "<nom>.txt",
+        input: files(MEDIA_EXT),
+        ..ready(
+            ff(
+                "audio-transcrire",
+                "Transcrire un audio",
+                "Transcrit la parole en texte avec whisper (local).",
+                A,
+                "<nom>.txt",
+            ),
+            &[
+                choice("langue", "Langue parlée", LANGS, "auto"),
+                choice("modele", "Modèle", WHISPER_MODELS, "small"),
+            ],
         )
     },
+    ToolDef {
+        input: super::InputSpec {
+            min_files: 2,
+            ..files(V)
+        },
+        ..ready(
+            ff(
+                "video-concatener",
+                "Assembler des vidéos",
+                "Met des vidéos bout à bout, dans l'ordre (taille de la première, réencodage H.264/AAC).",
+                V,
+                "<premiere>-assemble.mp4",
+            ),
+            &[],
+        )
+    },
+    ready(
+        ff(
+            "video-vignettes",
+            "Planche de vignettes",
+            "Image regroupant des captures réparties sur toute la durée de la vidéo.",
+            V,
+            "<nom>-vignettes.jpg",
+        ),
+        &[choice("grille", "Grille", GRIDS, "4x3")],
+    ),
+    ready(
+        ff(
+            "video-extraire-sous-titres",
+            "Extraire les sous-titres",
+            "Enregistre les pistes de sous-titres texte contenues dans la vidéo (.srt, .vtt, .ass).",
+            V,
+            "<nom>-st<N>[-langue].srt",
+        ),
+        &[],
+    ),
     ToolDef {
         input: files(MEDIA_EXT),
         ..ready(

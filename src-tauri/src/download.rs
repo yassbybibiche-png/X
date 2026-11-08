@@ -84,6 +84,8 @@ struct BinarySpec {
 struct Manifest {
     schema: u32,
     binaries: BTreeMap<String, BinarySpec>,
+    #[serde(default)]
+    models: BTreeMap<String, ModelSpec>,
 }
 
 fn manifest() -> &'static Manifest {
@@ -117,6 +119,8 @@ pub struct Offer {
     pub size: u64,
     /// Copies à créer après extraction : chemin du lien → chemin de la cible.
     pub aliases: BTreeMap<String, String>,
+    /// `false` pour un modèle (fichier de données, jamais rendu exécutable).
+    pub executable: bool,
 }
 
 /// Offre de téléchargement pour la plateforme courante, ou raison de l'absence.
@@ -151,6 +155,40 @@ fn offer_for(binary: Binary, key: &str) -> Result<Offer, String> {
         size: platform.files.iter().map(|f| f.size).sum(),
         files: platform.files.clone(),
         aliases: platform.aliases.clone(),
+        executable: true,
+    })
+}
+
+/// Modèle IA du manifeste (`models`) : fichier unique, toutes plateformes.
+#[derive(Debug, Clone, Deserialize)]
+struct ModelSpec {
+    version: String,
+    license: String,
+    file: String,
+    #[serde(default)]
+    files: Vec<FileSpec>,
+    #[serde(default)]
+    unavailable: Option<String>,
+}
+
+/// Offre de téléchargement d'un modèle (`id` = clé du manifeste), ou raison.
+pub fn model_offer(id: &'static str) -> Result<Offer, String> {
+    let spec = manifest()
+        .models
+        .get(id)
+        .ok_or_else(|| format!("modèle inconnu du manifeste : {id}"))?;
+    if let Some(reason) = &spec.unavailable {
+        return Err(reason.clone());
+    }
+    Ok(Offer {
+        id,
+        version: spec.version.clone(),
+        license: spec.license.clone(),
+        exe: spec.file.clone(),
+        size: spec.files.iter().map(|f| f.size).sum(),
+        files: spec.files.clone(),
+        aliases: BTreeMap::new(),
+        executable: false,
     })
 }
 
@@ -253,7 +291,9 @@ fn fill_staging(
     if !full.is_file() {
         bail!("exécutable {} absent de l'archive téléchargée", offer.exe);
     }
-    make_executable(&full)?;
+    if offer.executable {
+        make_executable(&full)?;
+    }
     Ok(exe)
 }
 
@@ -470,6 +510,15 @@ pub fn manifest_problems() -> Vec<String> {
             problems.extend(platform_problems(id, key, p));
         }
     }
+    for (id, spec) in &m.models {
+        let as_platform = PlatformSpec {
+            exe: Some(spec.file.clone()),
+            files: spec.files.clone(),
+            unavailable: spec.unavailable.clone(),
+            aliases: BTreeMap::new(),
+        };
+        problems.extend(platform_problems(id, "modele", &as_platform));
+    }
     problems
 }
 
@@ -526,6 +575,7 @@ mod tests {
             size: files.iter().map(|f| f.size).sum(),
             files,
             aliases: BTreeMap::new(),
+            executable: true,
         }
     }
 

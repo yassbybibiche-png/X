@@ -11,8 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::cancel::{self, CancelToken};
 use crate::download::{self, InstallHooks};
 use crate::jobs::{self, EventKind, JobEvent, JobInput, Reporter};
+use crate::models::{self, Model};
 use crate::registry::{self, Catalog};
 use crate::sidecar::{self, Binary, BinaryStatus, Resolver};
+use crate::ytdlp;
 
 /// Nom de l'événement de progression des tâches.
 pub const JOB_EVENT: &str = "job-event";
@@ -91,9 +93,43 @@ pub fn list_tools() -> Catalog {
 #[tauri::command]
 pub async fn check_tools(app: AppHandle) -> Result<Vec<BinaryStatus>, String> {
     let resolver = resolver(&app);
-    tokio::task::spawn_blocking(move || sidecar::check_all(&resolver))
+    tokio::task::spawn_blocking(move || {
+        let mut all = sidecar::check_all(&resolver);
+        all.extend(Model::ALL.iter().map(|m| models::status(&resolver, *m)));
+        all
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Version de yt-dlp installée comparée à la version épinglée (mise à jour =
+/// `download_binary("yt-dlp")`, qui réinstalle dans le dossier de données).
+#[tauri::command]
+pub async fn check_ytdlp_update(app: AppHandle) -> Result<ytdlp::UpdateStatus, String> {
+    let resolver = resolver(&app);
+    tokio::task::spawn_blocking(move || ytdlp::check_update(&resolver))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Offre + dossier d'installation d'un binaire ou d'un modèle du manifeste.
+fn install_target(
+    app: &AppHandle,
+    id: &str,
+) -> Result<(download::Offer, PathBuf, &'static str), String> {
+    let dir = bin_dir(app).ok_or("dossier de données de l'application introuvable")?;
+    if let Some(model) = Model::from_id(id) {
+        let models = dir
+            .parent()
+            .map(|d| d.join("models"))
+            .ok_or("dossier des modèles introuvable")?;
+        return Ok((download::model_offer(model.id())?, models, model.label()));
+    }
+    let bin = Binary::ALL
+        .into_iter()
+        .find(|b| b.id() == id)
+        .ok_or_else(|| format!("binaire inconnu : {id}"))?;
+    Ok((download::offer(bin)?, dir, bin.label()))
 }
 
 /// Lance un outil en arrière-plan ; renvoie l'identifiant de tâche.
@@ -190,18 +226,13 @@ pub async fn download_binary(
     state: State<'_, AppState>,
     binary: String,
 ) -> Result<u64, String> {
-    let bin = Binary::ALL
-        .into_iter()
-        .find(|b| b.id() == binary)
-        .ok_or_else(|| format!("binaire inconnu : {binary}"))?;
-    let offer = download::offer(bin)?;
-    let dir = bin_dir(&app).ok_or("dossier de données de l'application introuvable")?;
+    let (offer, dir, label) = install_target(&app, &binary)?;
     let seven_zip = resolver(&app).resolve(Binary::SevenZip).map(|r| r.path);
     let (job_id, token) = state.start();
     tokio::task::spawn_blocking(move || {
         let base = DownloadEvent {
             job_id,
-            binary: bin.id(),
+            binary: offer.id,
             kind: EventKind::Progress,
             done: 0,
             total: offer.size,
@@ -224,7 +255,7 @@ pub async fn download_binary(
         };
         match download::install(&offer, &dir, &download::Http, &hooks) {
             Ok(exe) => {
-                let message = format!("{} installé : {}", bin.label(), exe.display());
+                let message = format!("{label} installé : {}", exe.display());
                 emit_download(&app, &base, EventKind::Done, &message);
             }
             Err(e) if cancel::is_cancelled(&e) => {

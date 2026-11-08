@@ -179,28 +179,31 @@ complexes). Binaire « — » = pur Rust, aucun sidecar.
 | images-assembler-gif | — (crate image) | ≥2 images → GIF animé en boucle | **P1** |
 | images-vignettes | — (crate image) | images + côté max. → `-vignette.<ext>` (ajouté en phase 3a) | **P1** |
 
-### Vidéo / audio (19)
+### Vidéo / audio (22)
 | id | binaire | entrées → sortie | statut |
 |---|---|---|---|
 | video-convertir | ffmpeg | vidéo → mp4/mkv/webm/mov | **P1** |
 | video-compresser | ffmpeg | vidéo + CRF → `-compresse.mp4` | **P1** |
 | video-couper | ffmpeg | vidéo + début/fin → `-extrait` | **P1** |
 | video-extraire-audio | ffmpeg | vidéo → mp3/m4a/wav/flac | **P1** |
-| video-vers-gif | ffmpeg | vidéo + plage/fps/largeur → .gif (palette) | P2 |
+| video-vers-gif | ffmpeg | vidéo + plage/fps/largeur → .gif (palette optimisée, une passe) | **P1** |
 | video-extraire-image | ffmpeg | vidéo + horodatage → .png | **P1** |
-| video-sous-titres | ffmpeg + whisper-cli + modèle | vidéo → .srt | P3 |
-| video-incruster-sous-titres | ffmpeg | vidéo + .srt → `-soustitre.mp4` | P3 |
-| video-redimensionner | ffmpeg | vidéo + hauteur → `-720p` … | P2 |
-| video-pivoter | ffmpeg | vidéo + angle → `-pivote` | P2 |
+| video-sous-titres | ffmpeg + whisper-cli + modèle | vidéo/audio → .srt et/ou .vtt | **P1** |
+| video-incruster-sous-titres | ffmpeg (libass) | vidéo + .srt/.vtt/.ass → `-soustitre.mp4` | **P1** |
+| video-redimensionner | ffmpeg | vidéo + hauteur → `-720p` … (jamais d'agrandissement) | **P1** |
+| video-pivoter | ffmpeg | vidéo + angle → `-pivote` | **P1** |
 | video-supprimer-son | ffmpeg | vidéo → `-muet` | **P1** |
-| video-accelerer | ffmpeg | vidéo + facteur → `-x2` … | P3 |
-| video-telecharger | yt-dlp (+ ffmpeg) | URL + qualité → vidéo dans Téléchargements | P3 |
-| audio-telecharger | yt-dlp (+ ffmpeg) | URL → mp3/m4a | P3 |
+| video-accelerer | ffmpeg | vidéo + facteur (×0,25 à ×4) → `-x2` … | **P1** |
+| video-telecharger | yt-dlp (+ ffmpeg) | URL + qualité → Téléchargements/`<titre> [<id>].<ext>` | **P1** |
+| audio-telecharger | yt-dlp (+ ffmpeg) | URL → mp3/m4a/opus dans Téléchargements | **P1** |
 | audio-convertir | ffmpeg | audio → mp3/m4a/ogg/opus/wav/flac | **P1** |
 | audio-couper | ffmpeg | audio + début/fin → `-extrait` | **P1** |
-| audio-normaliser | ffmpeg (loudnorm) | audio → `-normalise` | P2 |
-| audio-transcrire | ffmpeg + whisper-cli + modèle | audio → .txt | P3 |
+| audio-normaliser | ffmpeg (loudnorm) | audio → `-normalise` | **P1** |
+| audio-transcrire | ffmpeg + whisper-cli + modèle | audio/vidéo → .txt | **P1** |
 | video-infos | ffmpeg (ffprobe) | vidéo/audio → `-infos.txt` (durée, pistes, codecs) | **P1** |
+| video-concatener | ffmpeg | ≥2 vidéos → `<1re>-assemble.mp4` (taille de la 1re, réencodage ; ajouté en phase 3a) | **P1** |
+| video-vignettes | ffmpeg | vidéo + grille → `-vignettes.jpg` (captures réparties ; ajouté en phase 3a) | **P1** |
+| video-extraire-sous-titres | ffmpeg (ffprobe) | vidéo → `-st<N>[-langue].srt/.vtt/.ass` (pistes texte ; ajouté en phase 3a) | **P1** |
 
 ### Archives (9)
 | id | binaire | entrées → sortie | statut |
@@ -339,8 +342,19 @@ raison explicite (jamais de faux succès).
   comparable en qualité multilingue / français, alors que whisper.cpp est MIT,
   sans dépendance, CPU uniquement.
 - Téléchargement au premier usage depuis le dépôt Hugging Face officiel
-  `ggerganov/whisper.cpp`, SHA-256 épinglé, progression affichée, reprise si
-  interrompu ; bouton « Supprimer le modèle » pour libérer la place.
+  `ggerganov/whisper.cpp`, SHA-256 épinglé, progression affichée ; bouton
+  « Supprimer le modèle » pour libérer la place (phase 3b).
+- **État phase 3a** : `whisper-cli` 1.9.5 (release `b5454`, empreintes publiées
+  par GitHub) est épinglé pour linux-x64 et windows-x64 (macOS : build
+  `deps.yml`). Les modèles sont déclarés dans la section `models` du manifeste,
+  rangés dans `<données>/models/<id>/`, affichés dans le Diagnostic (bouton
+  Télécharger via `download_binary("whisper-small")`). Leur SHA-256 n'est **pas
+  encore épinglé** : Hugging Face était injoignable depuis la VM de
+  développement (aucune empreinte inventée) ; l'entrée est donc `unavailable`
+  avec cette raison, et l'outil affiche « Modèle whisper … absent » + où le
+  déposer. Il suffira d'ajouter `files` (url, sha256, size) pour activer le
+  téléchargement au premier usage, déjà câblé et testé (même code que les
+  binaires).
 
 ### 3.6 Python embarqué : **non**
 - pandoc couvre toutes les conversions de documents ; typst fournit le PDF ;

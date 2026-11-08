@@ -31,21 +31,13 @@ pub struct Plan {
     pub post: Vec<String>,
     /// Durée attendue de la sortie (s), si connue.
     pub span: Option<f64>,
+    /// Dossier de travail de ffmpeg (ex. sous-titres référencés par un nom relatif).
+    pub dir: Option<PathBuf>,
 }
 
 /// Arguments complets ; la sortie est toujours le dernier argument.
 pub fn ffmpeg_args(plan: &Plan, input: &Path, output: &Path) -> Vec<OsString> {
-    let mut args: Vec<OsString> = [
-        "-hide_banner",
-        "-nostdin",
-        "-y",
-        "-progress",
-        "pipe:1",
-        "-nostats",
-    ]
-    .iter()
-    .map(OsString::from)
-    .collect();
+    let mut args = base_args();
     args.extend(plan.pre.iter().map(OsString::from));
     args.push("-i".into());
     args.push(input.into());
@@ -54,7 +46,7 @@ pub fn ffmpeg_args(plan: &Plan, input: &Path, output: &Path) -> Vec<OsString> {
     args
 }
 
-fn strings(items: &[&str]) -> Vec<String> {
+pub(crate) fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
 }
 
@@ -89,10 +81,23 @@ fn run_ffmpeg(
     plan: &Plan,
     out: &Path,
 ) -> Result<()> {
-    let total_us = AtomicU64::new(plan.span.map_or(0, |s| (s * 1e6) as u64));
+    let args = ffmpeg_args(plan, input, out);
+    let name = output::file_name(input);
+    run_progress(ctx, ffmpeg, &name, &args, (plan.span, plan.dir.as_deref()))
+}
+
+/// Exécute ffmpeg (arguments complets, `-progress pipe:1` inclus) ; `span` =
+/// durée attendue de la sortie (sinon lue dans l'en-tête `Duration:`).
+pub(crate) fn run_progress(
+    ctx: &ToolContext,
+    ffmpeg: &Path,
+    name: &str,
+    args: &[OsString],
+    (span, dir): (Option<f64>, Option<&Path>),
+) -> Result<()> {
+    let total_us = AtomicU64::new(span.map_or(0, |s| (s * 1e6) as u64));
     let last = AtomicU32::new(u32::MAX);
     let reporter = ctx.reporter;
-    let name = output::file_name(input);
     let on_line = |stream: Stream, line: &str| {
         if stream == Stream::Stderr {
             if let Some(d) = parse_duration_line(line) {
@@ -121,17 +126,62 @@ fn run_ffmpeg(
     };
     ctx.reporter
         .progress(0.0, &format!("Traitement de {name}…"));
-    ctx.run_sidecar(
-        ffmpeg,
-        "ffmpeg",
-        &ffmpeg_args(plan, input, out),
-        Some(&on_line),
-    )?;
+    let opts = sidecar::RunOptions {
+        current_dir: dir,
+        ..ctx.run_options(Some(&on_line))
+    };
+    sidecar::run_with(ffmpeg, args, opts)?.check("ffmpeg")?;
     Ok(())
 }
 
+/// Début des arguments ffmpeg communs (avant les entrées).
+pub(crate) fn base_args() -> Vec<OsString> {
+    [
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+    ]
+    .iter()
+    .map(OsString::from)
+    .collect()
+}
+
+/// `ffprobe -show_format -show_streams` en JSON (None si ffprobe est absent).
+pub(crate) fn probe(ctx: &ToolContext, ffmpeg: &Path, path: &Path) -> Result<Option<Value>> {
+    let Some(ffprobe) = sidecar::sibling(ffmpeg, "ffprobe") else {
+        return Ok(None);
+    };
+    let mut args: Vec<OsString> = [
+        "-v",
+        "error",
+        "-show_format",
+        "-show_streams",
+        "-of",
+        "json",
+    ]
+    .iter()
+    .map(OsString::from)
+    .collect();
+    args.push(path.into());
+    let run = ctx.run_sidecar(&ffprobe, "ffprobe", &args, None)?;
+    Ok(Some(
+        serde_json::from_str(&run.stdout).context("réponse de ffprobe illisible")?,
+    ))
+}
+
+/// Durée (s) d'après ffprobe.
+pub(crate) fn probe_duration(json: &Value) -> Option<f64> {
+    seconds(&json["format"], "duration")
+}
+
 /// Applique le plan ffmpeg de chaque fichier ; sortie réservée avant l'appel.
-fn media_each(ctx: &ToolContext, plan_for: impl Fn(&Path) -> Result<Plan>) -> Result<Vec<PathBuf>> {
+pub(crate) fn media_each(
+    ctx: &ToolContext,
+    plan_for: impl Fn(&Path) -> Result<Plan>,
+) -> Result<Vec<PathBuf>> {
     let ffmpeg = ctx.binary(Binary::Ffmpeg)?;
     per_file(ctx, |path| {
         ctx.check_cancel()?;
@@ -142,7 +192,7 @@ fn media_each(ctx: &ToolContext, plan_for: impl Fn(&Path) -> Result<Plan>) -> Re
     })
 }
 
-fn input_ext(path: &Path) -> String {
+pub(crate) fn input_ext(path: &Path) -> String {
     path.extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_else(|| "mkv".into())
@@ -258,6 +308,7 @@ pub fn cut_plan(start: &str, end: &str, precision: &str, ext: String) -> Result<
         pre: vec!["-ss".into(), format!("{from:.3}")],
         post,
         span,
+        dir: None,
     })
 }
 
@@ -309,7 +360,7 @@ pub fn frame(ctx: &ToolContext) -> Result<Vec<PathBuf>> {
             ext: "png".into(),
             pre: vec!["-ss".into(), format!("{at:.3}")],
             post: strings(&["-frames:v", "1", "-update", "1"]),
-            span: None,
+            ..Plan::default()
         })
     })
 }

@@ -12,6 +12,8 @@ pub mod images_extra;
 pub mod images_magick;
 pub mod magick;
 pub mod media;
+pub mod media_download;
+pub mod media_more;
 pub mod ocr;
 pub mod pdf;
 pub mod pdf_gs;
@@ -21,6 +23,7 @@ pub mod pdf_qpdf;
 pub mod pdf_stamp;
 #[cfg(test)]
 pub mod testutil;
+pub mod transcribe;
 pub mod utilitaires;
 
 use std::path::{Path, PathBuf};
@@ -92,6 +95,19 @@ const IMPLEMENTED: &[(&str, ToolFn)] = &[
     ("video-infos", media::info),
     ("audio-convertir", media::to_audio),
     ("audio-couper", media::cut),
+    ("video-vers-gif", media_more::to_gif),
+    ("video-redimensionner", media_more::resize),
+    ("video-pivoter", media_more::rotate),
+    ("video-accelerer", media_more::speed),
+    ("audio-normaliser", media_more::normalize),
+    ("video-incruster-sous-titres", media_more::burn_subtitles),
+    ("video-extraire-sous-titres", media_more::extract_subtitles),
+    ("video-concatener", media_more::concat),
+    ("video-vignettes", media_more::thumbnail_sheet),
+    ("video-sous-titres", transcribe::subtitles),
+    ("audio-transcrire", transcribe::transcript),
+    ("video-telecharger", media_download::download_video),
+    ("audio-telecharger", media_download::download_audio),
     ("archives-creer-zip", archives::create_zip),
     ("archives-extraire-zip", archives_extract::extract_zip),
     ("archives-creer-tar", archives::create_tar),

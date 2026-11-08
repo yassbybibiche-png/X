@@ -340,10 +340,37 @@ function celluleAction(b) {
     td.append(bouton);
   } else if (b.state === "absent") {
     td.textContent = b.unavailableReason ?? "Non disponible sur ce système";
+  } else if (b.id === "yt-dlp") {
+    td.append(boutonMiseAJour(b));
   } else {
     td.textContent = "—";
   }
   return td;
+}
+
+// yt-dlp n'est jamais figé : comparaison avec la version épinglée, puis
+// réinstallation dans le dossier de données (prioritaire sur le PATH).
+function boutonMiseAJour(b) {
+  const bouton = el("button", "Vérifier la mise à jour", "petit");
+  bouton.type = "button";
+  bouton.addEventListener("click", async () => {
+    bouton.disabled = true;
+    try {
+      const s = await invoke("check_ytdlp_update");
+      messageDiagnostic(s.message, s.updateAvailable ? "warning" : "");
+      if (s.updateAvailable) {
+        const maj = el("button", `Mettre à jour vers ${s.pinned}`, "petit");
+        maj.type = "button";
+        maj.addEventListener("click", () => telecharger(b));
+        bouton.replaceWith(maj);
+      }
+    } catch (e) {
+      messageDiagnostic("Vérification impossible : " + e, "error");
+    } finally {
+      bouton.disabled = false;
+    }
+  });
+  return bouton;
 }
 
 async function telecharger(b) {
