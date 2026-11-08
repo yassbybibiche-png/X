@@ -392,3 +392,8 @@ Progression (une ligne par groupe) :
   directement dans des scripts shell (motif d'injection de script GitHub
   Actions) → passé par variables d'environnement (`TAG`, `PLATFORM`,
   `PATTERN`, `REPO`). actionlint 1.7.12 : 0 trouvaille.
+- Correctif d'audit (Windows) : `utilitaires-renommer-lot` refuse les noms de
+  périphériques réservés (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`,
+  `LPT1`–`LPT9`, avec ou sans extension), les caractères de contrôle, et retire
+  les points finaux (que Windows supprime silencieusement). Testé. fmt OK,
+  clippy OK.

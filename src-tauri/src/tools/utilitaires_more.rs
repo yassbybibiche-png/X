@@ -60,11 +60,34 @@ pub fn render_pattern(
         .replace("{n}", &format!("{n:0digits$}"))
         .replace("{nom}", original)
         .replace("{date}", date);
-    let trimmed = name.trim();
-    if trimmed.is_empty() || trimmed == "." || trimmed == ".." || trimmed.contains(FORBIDDEN) {
+    // Windows retire les points et espaces finaux : on le fait nous-mêmes.
+    let trimmed = name.trim().trim_end_matches('.');
+    if trimmed.is_empty()
+        || trimmed == "."
+        || trimmed.contains(FORBIDDEN)
+        || trimmed.chars().any(char::is_control)
+    {
         bail!("motif invalide : « {pattern} » (caractères interdits : / \\ : * ? \" < > |)");
     }
+    if is_windows_device(trimmed) {
+        bail!("nom réservé par Windows : « {trimmed} » (CON, PRN, AUX, NUL, COM1…, LPT1…)");
+    }
     Ok(trimmed.to_string())
+}
+
+/// Noms de périphériques Windows (avec ou sans extension) : `CON`, `nul.txt`…
+fn is_windows_device(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_uppercase();
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit()
+            && stem.as_bytes()[3] != b'0')
 }
 
 fn modified_date(path: &Path) -> String {
@@ -401,6 +424,17 @@ mod tests {
         );
         assert!(a.exists(), "original intact");
         assert!(render_pattern("../x{n}", 1, 2, "a", "d").is_err());
+        assert!(render_pattern("con", 1, 2, "a", "d").is_err());
+        assert!(render_pattern("{nom}", 1, 2, "LPT1", "d").is_err());
+        assert!(render_pattern("..", 1, 2, "a", "d").is_err());
+        assert_eq!(
+            render_pattern("COM10 {n}.", 1, 2, "a", "d").unwrap(),
+            "COM10 01"
+        );
+        assert_eq!(
+            render_pattern("console-{n}", 1, 2, "a", "d").unwrap(),
+            "console-01"
+        );
         assert_eq!(
             render_pattern("{date}-{nom}", 1, 2, "a", "2026-11-08").unwrap(),
             "2026-11-08-a"
