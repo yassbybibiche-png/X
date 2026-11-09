@@ -2,6 +2,7 @@
 // Toutes les données affichées passent par textContent (jamais innerHTML).
 
 import { creerSuivi, FINALES } from "./taches.js";
+import { modeBinaire } from "./diagnostic.js";
 
 const tauri = window.__TAURI__;
 const invoke = tauri.core.invoke;
@@ -20,7 +21,6 @@ const etat = {
 
 const PHASES = { phase1: "Disponible", phase2: "Prévu en phase 2", phase3: "Prévu en phase 3" };
 const ORIGINES = { bundled: "incluse", "app-data": "données de l'app", "system-path": "PATH système" };
-const MODES = { bundled: "inclus dans l'installeur", "first-use": "téléchargé au premier usage" };
 const ETATS = {
   present: "Présent",
   casse: "Trouvé mais ne s'exécute pas",
@@ -353,7 +353,7 @@ function ligneBinaire(b) {
     b.source ? ORIGINES[b.source] : "—",
     b.path ?? "—",
     b.license,
-    MODES[b.delivery],
+    modeBinaire(b),
   ];
   for (const c of cellules) tr.append(el("td", c));
   tr.append(celluleAction(b));

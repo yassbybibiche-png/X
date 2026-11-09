@@ -49,7 +49,7 @@ jobs:
       - run: cargo test
       - name: Syntaxe du frontend
         working-directory: src
-        run: node --check main.js && node --check taches.js
+        run: node --check main.js && node --check taches.js && node --check diagnostic.js
       - name: Tests du frontend (node:test, sans dépendance)
         working-directory: .
         run: node --test tests/frontend/*.test.js
