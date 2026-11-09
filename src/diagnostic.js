@@ -12,5 +12,6 @@ export function modeBinaire(b) {
   if (b.source) return MODES_SOURCE[b.source] ?? "—";
   if (b.delivery === "bundled") return MODES_SOURCE.bundled;
   if (b.state === "telechargeable") return MODES_SOURCE["app-data"];
-  return "à installer sur le système";
+  // Raison détaillée dans la colonne Action (paquet système, SHA non épinglé…).
+  return "non disponible ici";
 }

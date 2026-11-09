@@ -15,6 +15,6 @@ test("mode d'un binaire trouvé : d'après sa source réelle", () => {
 
 test("mode d'un binaire absent : d'après ce qui est possible ici", () => {
   assert.equal(modeBinaire({ delivery: "first-use", state: "telechargeable" }), "téléchargé au premier usage");
-  assert.equal(modeBinaire({ delivery: "first-use", state: "absent" }), "à installer sur le système");
+  assert.equal(modeBinaire({ delivery: "first-use", state: "absent" }), "non disponible ici");
   assert.equal(modeBinaire({ delivery: "bundled", state: "absent" }), "inclus dans l'installeur");
 });
