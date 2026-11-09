@@ -155,6 +155,15 @@ impl Binary {
             _ => &["--version"],
         }
     }
+
+    /// Vrai si [`Binary::version_args`] affiche en fait l'aide : certains
+    /// binaires sortent alors avec un code non nul (Real-ESRGAN `-h` : 255).
+    fn version_is_help(self) -> bool {
+        matches!(
+            self,
+            Binary::SevenZip | Binary::Whisper | Binary::RealEsrgan
+        )
+    }
 }
 
 /// Origine d'un binaire résolu.
@@ -610,23 +619,89 @@ fn kill(child: &mut Child) {
     let _ = child.wait();
 }
 
-/// Première ligne non vide de la sortie « version » du binaire.
+/// Résultat du test d'exécution d'un binaire (Diagnostic).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Probe {
+    /// Le binaire s'exécute ; version extraite si elle est lisible.
+    Runs(Option<String>),
+    /// Le binaire est trouvé mais ne s'exécute pas (bibliothèque manquante,
+    /// erreur Python…) ; message d'erreur tronqué.
+    Broken(String),
+}
+
+/// Lance le binaire avec ses arguments « version » : il ne compte comme
+/// présent que s'il s'exécute réellement (v0.1.0 : un Tesseract en
+/// `symbol lookup error` était affiché « Présent »).
+pub fn probe(binary: Binary, path: &Path) -> Probe {
+    let out = match run(path, binary.version_args(), Duration::from_secs(10)) {
+        Ok(out) => out,
+        // Lent sans planter (ex. AppImage qui s'auto-extrait) : bénéfice du doute.
+        Err(e)
+            if matches!(
+                e.downcast_ref::<SidecarError>(),
+                Some(SidecarError::Timeout { .. })
+            ) =>
+        {
+            return Probe::Runs(None);
+        }
+        Err(e) => return Probe::Broken(e.to_string()),
+    };
+    let help_shown = binary.version_is_help()
+        && (out.stdout.to_ascii_lowercase().contains("usage")
+            || out.stderr.to_ascii_lowercase().contains("usage"));
+    if out.status.success() || help_shown {
+        return Probe::Runs(parse_version(&out.stdout, &out.stderr));
+    }
+    let detail = first_line(&out.stderr)
+        .or_else(|| first_line(&out.stdout))
+        .unwrap_or_default();
+    let detail: String = detail.chars().take(200).collect();
+    Probe::Broken(format!("ne s'exécute pas ({}) : {detail}", out.status))
+}
+
+fn first_line(text: &str) -> Option<&str> {
+    text.lines().map(str::trim).find(|l| !l.is_empty())
+}
+
+/// Numéro de version lu dans la première ligne de stdout, sinon de stderr :
+/// premier mot qui commence par un chiffre (ou `v` + chiffre) et contient un
+/// point (« ffmpeg version 8.1.2 Copyright… » → `8.1.2`). `None` si illisible.
+pub fn parse_version(stdout: &str, stderr: &str) -> Option<String> {
+    [stdout, stderr]
+        .into_iter()
+        .filter_map(first_line)
+        .find_map(|line| line.split_whitespace().find_map(version_token))
+}
+
+fn version_token(word: &str) -> Option<String> {
+    let w = word.trim_matches(|c: char| matches!(c, '(' | ')' | '[' | ']' | ',' | ';' | ':'));
+    let w = w
+        .strip_prefix(['v', 'V'])
+        .filter(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+        .unwrap_or(w);
+    let valid = w.starts_with(|c: char| c.is_ascii_digit())
+        && w.contains('.')
+        && w.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_' | '~'));
+    valid.then(|| w.chars().take(40).collect())
+}
+
+/// Version du binaire (`None` s'il ne s'exécute pas ou si elle est illisible).
 pub fn version(binary: Binary, path: &Path) -> Option<String> {
-    let out = run(path, binary.version_args(), Duration::from_secs(10)).ok()?;
-    out.stdout
-        .lines()
-        .chain(out.stderr.lines())
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .map(|l| l.chars().take(120).collect())
+    match probe(binary, path) {
+        Probe::Runs(v) => v,
+        Probe::Broken(_) => None,
+    }
 }
 
 /// Disponibilité d'un binaire pour l'écran Diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum State {
-    /// Trouvé (bundlé, données app ou PATH).
+    /// Trouvé (bundlé, données app ou PATH) et s'exécute.
     Present,
+    /// Trouvé mais ne s'exécute pas (voir `BinaryStatus.error`).
+    Casse,
     /// Absent mais téléchargeable depuis le manifeste épinglé.
     Telechargeable,
     /// Absent et non téléchargeable sur cette plateforme (raison fournie).
@@ -652,27 +727,36 @@ pub struct BinaryStatus {
     pub download_size: Option<u64>,
     /// Raison pour laquelle le binaire n'est pas téléchargeable ici.
     pub unavailable_reason: Option<String>,
+    /// Erreur d'exécution d'un binaire trouvé mais cassé ([`State::Casse`]).
+    pub error: Option<String>,
 }
 
 pub fn status(resolver: &Resolver, binary: Binary) -> BinaryStatus {
     let resolved = resolver.resolve(binary);
-    let version = resolved.as_ref().and_then(|r| version(binary, &r.path));
+    let probe = resolved.as_ref().map(|r| probe(binary, &r.path));
     let offer = crate::download::offer(binary);
-    let state = match (&resolved, &offer) {
-        (Some(_), _) => State::Present,
+    let state = match (&probe, &offer) {
+        (Some(Probe::Runs(_)), _) => State::Present,
+        (Some(Probe::Broken(_)), _) => State::Casse,
         (None, Ok(_)) => State::Telechargeable,
         (None, Err(_)) => State::Absent,
+    };
+    let (version, error) = match probe {
+        Some(Probe::Runs(v)) => (v, None),
+        Some(Probe::Broken(e)) => (None, Some(e)),
+        None => (None, None),
     };
     BinaryStatus {
         id: binary.id(),
         label: binary.label(),
         license: binary.license(),
         delivery: binary.delivery(),
-        present: resolved.is_some(),
+        present: state == State::Present,
         state,
         source: resolved.as_ref().map(|r| r.source),
         path: resolved.map(|r| r.path.display().to_string()),
         version,
+        error,
         pinned_version: offer.as_ref().ok().map(|o| o.version.clone()),
         download_size: offer.as_ref().ok().map(|o| o.size),
         unavailable_reason: offer.err(),
@@ -997,5 +1081,111 @@ mod tests {
         assert!(!s.present);
         assert_eq!(s.path, None);
         assert_eq!(s.license, "AGPL-3.0");
+    }
+
+    #[test]
+    fn version_extraite_proprement() {
+        let cas = [
+            ("ffmpeg version 8.1.2 Copyright (c) 2000-2026", "8.1.2"),
+            ("ffmpeg version 6.1.1-static https://x", "6.1.1-static"),
+            ("Version: ImageMagick 6.9.12-98 Q16 x86_64", "6.9.12-98"),
+            ("\n7-Zip (z) 26.00 (x64) : Copyright", "26.00"),
+            ("10.02.1", "10.02.1"),
+            ("2024.04.09", "2024.04.09"),
+            ("tesseract 5.3.4\n leptonica-1.84.1", "5.3.4"),
+            ("typst 0.15.1 (abcdef12)", "0.15.1"),
+            ("qpdf version 11.9.0", "11.9.0"),
+            ("whatever v1.9.5", "1.9.5"),
+        ];
+        for (sortie, attendu) in cas {
+            assert_eq!(parse_version(sortie, ""), Some(attendu.into()), "{sortie}");
+        }
+        // Version sur stderr seulement (anciens Tesseract).
+        assert_eq!(parse_version("", "tesseract 4.1.1"), Some("4.1.1".into()));
+        // Illisible : jamais de texte brut (aide, build git, ligne 2 « gcc 13.2.0 »).
+        for sortie in [
+            "usage: whisper-cli [options] file0 file1 ...",
+            "ffmpeg version N-113-gabc Copyright (c) 2000-2024\nbuilt with gcc 13.2.0",
+            "Python path configuration:",
+        ] {
+            assert_eq!(parse_version(sortie, ""), None, "{sortie}");
+        }
+    }
+
+    /// v0.1.0 (VM de vérification) : Tesseract en `symbol lookup error` et
+    /// yt-dlp en erreur Python étaient affichés « Présent » avec l'erreur
+    /// en guise de version.
+    #[cfg(unix)]
+    #[test]
+    fn binaire_casse_signale_et_non_present() {
+        use crate::tools::testutil::fake_bin;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("path");
+        fake_bin(
+            &path,
+            "tesseract",
+            "echo 'tesseract: symbol lookup error: /lib/libcurl.so.4: undefined symbol: nghttp2_option_set_no_rfc' >&2; exit 127",
+        );
+        fake_bin(
+            &path,
+            "yt-dlp",
+            "echo 'Python path configuration:' >&2; echo '  PYTHONHOME = (not set)' >&2; exit 1",
+        );
+        let r = resolver(tmp.path());
+        for b in [Binary::Tesseract, Binary::YtDlp] {
+            let s = status(&r, b);
+            assert_eq!(s.state, State::Casse, "{s:?}");
+            assert!(!s.present);
+            assert_eq!(s.version, None);
+            assert_eq!(s.source, Some(Source::SystemPath));
+            assert!(s.error.as_deref().unwrap().contains("ne s'exécute pas"));
+        }
+        let s = status(&r, Binary::Tesseract);
+        assert!(s.error.unwrap().contains("symbol lookup error"));
+        assert_eq!(serde_json::to_value(State::Casse).unwrap(), "casse");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn binaire_sain_present_avec_sa_version() {
+        use crate::tools::testutil::fake_bin;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("path");
+        fake_bin(
+            &path,
+            "qpdf",
+            "echo 'qpdf version 11.9.0'; echo 'Run qpdf --copyright'",
+        );
+        // `-h` affiche l'aide avec un code non nul (Real-ESRGAN : 255) : sain.
+        fake_bin(
+            &path,
+            "realesrgan-ncnn-vulkan",
+            "echo 'Usage: realesrgan-ncnn-vulkan -i infile -o outfile' >&2; exit 255",
+        );
+        let r = resolver(tmp.path());
+        let s = status(&r, Binary::Qpdf);
+        assert_eq!((s.state, s.present), (State::Present, true));
+        assert_eq!(s.version.as_deref(), Some("11.9.0"));
+        assert_eq!(s.error, None);
+        let s = status(&r, Binary::RealEsrgan);
+        assert_eq!(
+            (s.state, s.present, s.version),
+            (State::Present, true, None)
+        );
+    }
+
+    /// Le vrai ffmpeg de la VM : présent, version numérique seule.
+    #[test]
+    fn diagnostic_du_vrai_ffmpeg() {
+        let Some(r) = crate::tools::testutil::real(&[Binary::Ffmpeg]) else {
+            return;
+        };
+        let s = status(&r, Binary::Ffmpeg);
+        assert_eq!(s.state, State::Present, "{s:?}");
+        let v = s.version.expect("version lue");
+        assert!(
+            v.starts_with(|c: char| c.is_ascii_digit()) && !v.contains(' '),
+            "{v}"
+        );
     }
 }

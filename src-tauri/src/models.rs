@@ -110,6 +110,7 @@ pub fn status(resolver: &Resolver, model: Model) -> crate::sidecar::BinaryStatus
         pinned_version: offer.as_ref().ok().map(|o| o.version.clone()),
         download_size: offer.as_ref().ok().map(|o| o.size),
         unavailable_reason: offer.err(),
+        error: None,
     }
 }
 

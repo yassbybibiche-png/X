@@ -21,7 +21,12 @@ const etat = {
 const PHASES = { phase1: "Disponible", phase2: "Prévu en phase 2", phase3: "Prévu en phase 3" };
 const ORIGINES = { bundled: "incluse", "app-data": "données de l'app", "system-path": "PATH système" };
 const MODES = { bundled: "inclus dans l'installeur", "first-use": "téléchargé au premier usage" };
-const ETATS = { present: "Présent", telechargeable: "Absent — téléchargeable", absent: "Absent" };
+const ETATS = {
+  present: "Présent",
+  casse: "Trouvé mais ne s'exécute pas",
+  telechargeable: "Absent — téléchargeable",
+  absent: "Absent",
+};
 
 function taille(octets) {
   if (!octets) return "";
@@ -133,7 +138,9 @@ function aidesBinairesManquants(outil) {
   return binairesManquants(outil).map((id) => {
     const b = etat.binaires.get(id);
     const p = el("p", undefined, "aide-binaire");
-    if (b?.state === "telechargeable") {
+    // Binaire cassé mais téléchargeable : la copie téléchargée (dossier de
+    // données de l'app) passe avant celle du PATH.
+    if (b?.state === "telechargeable" || (b?.state === "casse" && b.pinnedVersion)) {
       const bouton = el("button", `Télécharger ${b.label} ${b.pinnedVersion ?? ""} (${taille(b.downloadSize)})`, "petit");
       bouton.type = "button";
       bouton.title = `Licence : ${b.license}. Source épinglée, empreinte SHA-256 vérifiée.`;
@@ -142,6 +149,8 @@ function aidesBinairesManquants(outil) {
         afficherVue("diagnostic");
       });
       p.append(bouton);
+    } else if (b?.state === "casse") {
+      p.textContent = `${b.label} : ${b.error} ${b.unavailableReason ?? ""}`;
     } else {
       p.textContent = `${b?.label ?? id} : ${b?.unavailableReason ?? "non disponible sur ce système — voir l'onglet Diagnostic."}`;
     }
@@ -376,12 +385,16 @@ function celluleAction(b) {
     annulerDl.addEventListener("click", () => invoke("cancel_job", { jobId }).catch((e) => messageDiagnostic(String(e), "error")));
     bloc.append(barre, el("span", t.message || taille(t.termine) + " / " + taille(t.total)), annulerDl);
     td.append(bloc);
-  } else if (b.state === "telechargeable") {
+  } else if (b.state === "telechargeable" || (b.state === "casse" && b.pinnedVersion)) {
     const bouton = el("button", `Télécharger ${b.pinnedVersion ?? ""} (${taille(b.downloadSize)})`, "petit");
     bouton.type = "button";
     bouton.title = `Licence : ${b.license}. Téléchargement depuis une source épinglée, empreinte SHA-256 vérifiée.`;
     bouton.addEventListener("click", () => telecharger(b));
     td.append(bouton);
+    if (b.error) td.append(el("p", b.error, "erreur-binaire"));
+  } else if (b.state === "casse") {
+    td.append(el("p", b.error, "erreur-binaire"));
+    if (b.unavailableReason) td.append(el("p", b.unavailableReason));
   } else if (b.state === "absent") {
     td.textContent = b.unavailableReason ?? "Non disponible sur ce système";
   } else if (b.id === "yt-dlp") {
