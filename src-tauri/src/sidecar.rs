@@ -518,6 +518,7 @@ fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], opts: &RunOptions) -> Resu
     } else {
         Stdio::null()
     };
+    apply_env_fixes(&mut cmd, appimage_env_fixes());
     // Les AppImage téléchargées (ImageMagick Linux) exigent FUSE, absent par
     // défaut sur beaucoup de distributions (Ubuntu 24.04 : pas de libfuse2) :
     // cette variable les fait s'auto-extraire. Sans effet sur les autres binaires.
@@ -534,6 +535,90 @@ fn spawn<S: AsRef<OsStr>>(program: &Path, args: &[S], opts: &RunOptions) -> Resu
         }
         .into()
     })
+}
+
+/// Modification d'une variable d'environnement : `None` = la retirer.
+pub type EnvFix = (OsString, Option<OsString>);
+
+/// Variables posées par le runtime AppImage et son `AppRun`, retirées en bloc.
+const APPIMAGE_VARS: [&str; 7] = [
+    "APPDIR",
+    "APPIMAGE",
+    "ARGV0",
+    "OWD",
+    "LD_PRELOAD",
+    "PYTHONHOME",
+    "PYTHONDONTWRITEBYTECODE",
+];
+
+/// Environnement à rendre aux sidecars quand l'app tourne en AppImage
+/// (calculé une fois ; vide hors AppImage).
+fn appimage_env_fixes() -> &'static [EnvFix] {
+    static FIXES: std::sync::OnceLock<Vec<EnvFix>> = std::sync::OnceLock::new();
+    FIXES.get_or_init(|| match appimage_dir() {
+        Some(dir) => env_fixes(std::env::vars_os(), &dir),
+        None => Vec::new(),
+    })
+}
+
+/// Dossier monté de l'AppImage en cours (`APPDIR`), si l'app en est une.
+fn appimage_dir() -> Option<PathBuf> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    let dir = PathBuf::from(std::env::var_os("APPDIR").filter(|d| !d.is_empty())?);
+    let inside = std::env::var_os("APPIMAGE").is_some()
+        || std::env::current_exe().is_ok_and(|exe| exe.starts_with(&dir));
+    inside.then_some(dir)
+}
+
+/// L'AppImage transmet à ses processus fils ses bibliothèques et son Python
+/// (`LD_LIBRARY_PATH`, `PYTHONHOME`… pointant dans `appdir`), ce qui casse les
+/// binaires du système et ceux téléchargés (v0.1.0 : Tesseract en `symbol
+/// lookup error` sur le libnghttp2 embarqué, yt-dlp en « Python path
+/// configuration »). Retire les variables propres à l'AppImage et, dans les
+/// listes de chemins (`PATH`, `LD_LIBRARY_PATH`, `XDG_DATA_DIRS`, `GTK_PATH`…),
+/// les entrées situées dans `appdir` et les entrées vides (= dossier courant)
+/// qu'elle y ajoute. Les valeurs d'origine de l'utilisateur sont conservées.
+pub fn env_fixes(
+    vars: impl IntoIterator<Item = (OsString, OsString)>,
+    appdir: &Path,
+) -> Vec<EnvFix> {
+    let marker = appdir.to_string_lossy();
+    let marker = marker.trim_end_matches('/');
+    let mut fixes = Vec::new();
+    for (key, value) in vars {
+        let name = key.to_string_lossy();
+        if APPIMAGE_VARS.contains(&name.as_ref()) || name.starts_with("APPIMAGE_") {
+            fixes.push((key, None));
+            continue;
+        }
+        if marker.is_empty() || !value.to_string_lossy().contains(marker) {
+            continue;
+        }
+        let entries: Vec<PathBuf> = std::env::split_paths(&value).collect();
+        if !entries.iter().any(|p| p.starts_with(appdir)) {
+            continue;
+        }
+        let kept: Vec<PathBuf> = entries
+            .into_iter()
+            .filter(|p| !p.as_os_str().is_empty() && !p.starts_with(appdir))
+            .collect();
+        let new = (!kept.is_empty())
+            .then(|| std::env::join_paths(kept).ok())
+            .flatten();
+        fixes.push((key, new));
+    }
+    fixes
+}
+
+fn apply_env_fixes(cmd: &mut Command, fixes: &[EnvFix]) {
+    for (key, value) in fixes {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
+    }
 }
 
 #[cfg(windows)]
@@ -963,6 +1048,215 @@ mod tests {
         )
         .unwrap();
         assert!(out.stdout.contains("APPIMAGE_EXTRACT_AND_RUN=1"));
+    }
+
+    /// Environnement d'une AppImage linuxdeploy (runtime + `AppRun` + hook
+    /// GTK) tel que l'app v0.1.0 le recevait et le transmettait aux sidecars.
+    #[cfg(unix)]
+    fn appimage_env(appdir: &Path, user_ld: Option<&str>) -> Vec<(OsString, OsString)> {
+        let a = appdir.display();
+        let path = std::env::var("PATH").unwrap_or_default();
+        let ld = user_ld.unwrap_or_default();
+        [
+            ("APPDIR", a.to_string()),
+            ("APPIMAGE", "/home/u/Boite a outils.AppImage".into()),
+            ("ARGV0", "./Boite a outils.AppImage".into()),
+            ("OWD", "/home/u".into()),
+            ("APPIMAGE_EXTRACT_AND_RUN", "1".into()),
+            ("LD_PRELOAD", format!("{a}/usr/lib/libhook.so")),
+            (
+                "PATH",
+                format!("{a}/usr/bin/:{a}/usr/sbin/:{a}/bin/:{path}"),
+            ),
+            (
+                "LD_LIBRARY_PATH",
+                format!("{a}/usr/lib/:{a}/usr/lib/x86_64-linux-gnu/:{a}/lib/:{ld}"),
+            ),
+            ("PYTHONHOME", format!("{a}/usr/")),
+            ("PYTHONPATH", format!("{a}/usr/share/pyshared/:")),
+            ("PYTHONDONTWRITEBYTECODE", "1".into()),
+            (
+                "XDG_DATA_DIRS",
+                format!("{a}/usr/share:/usr/share:{a}/usr/share/:"),
+            ),
+            (
+                "PERLLIB",
+                format!("{a}/usr/share/perl5/:{a}/usr/lib/perl5/:"),
+            ),
+            (
+                "GSETTINGS_SCHEMA_DIR",
+                format!("{a}//usr/share/glib-2.0/schemas"),
+            ),
+            ("GTK_PATH", format!("{a}//usr/lib/gtk-3.0")),
+            ("GTK_DATA_PREFIX", a.to_string()),
+            ("GTK_THEME", "Adwaita:light".into()),
+            ("LANG", "C.UTF-8".into()),
+        ]
+        .map(|(k, v)| (k.into(), v.into()))
+        .to_vec()
+    }
+
+    /// Environnement final après correction (même logique que `Command`).
+    #[cfg(unix)]
+    fn fixed(vars: &[(OsString, OsString)], appdir: &Path) -> Vec<(String, String)> {
+        let mut env: std::collections::BTreeMap<OsString, OsString> =
+            vars.iter().cloned().collect();
+        for (k, v) in env_fixes(vars.to_vec(), appdir) {
+            match v {
+                Some(v) => env.insert(k, v),
+                None => env.remove(&k),
+            };
+        }
+        env.into_iter()
+            .map(|(k, v)| (k.to_string_lossy().into(), v.to_string_lossy().into()))
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn environnement_appimage_nettoye() {
+        let appdir = Path::new("/tmp/.mount_BoiteXy12");
+        let env = fixed(&appimage_env(appdir, Some("/opt/perso/lib")), appdir);
+        let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
+        for k in [
+            "APPDIR",
+            "APPIMAGE",
+            "ARGV0",
+            "OWD",
+            "APPIMAGE_EXTRACT_AND_RUN",
+            "LD_PRELOAD",
+            "PYTHONHOME",
+            "PYTHONPATH",
+            "PYTHONDONTWRITEBYTECODE",
+            "PERLLIB",
+            "GSETTINGS_SCHEMA_DIR",
+            "GTK_PATH",
+            "GTK_DATA_PREFIX",
+        ] {
+            assert_eq!(get(k), None, "{k} doit être retirée");
+        }
+        assert!(
+            env.iter().all(|(_, v)| !v.contains(".mount_BoiteXy12")),
+            "{env:?}"
+        );
+        // Valeurs de l'utilisateur conservées, entrées vides (= dossier courant) retirées.
+        assert_eq!(get("LD_LIBRARY_PATH"), Some("/opt/perso/lib"));
+        assert_eq!(get("PATH"), std::env::var("PATH").ok().as_deref());
+        assert_eq!(get("XDG_DATA_DIRS"), Some("/usr/share"));
+        assert_eq!(get("GTK_THEME"), Some("Adwaita:light"));
+        assert_eq!(get("LANG"), Some("C.UTF-8"));
+        // Sans valeur d'origine, LD_LIBRARY_PATH disparaît complètement.
+        let env = fixed(&appimage_env(appdir, None), appdir);
+        assert!(env.iter().all(|(k, _)| k != "LD_LIBRARY_PATH"));
+    }
+
+    #[test]
+    fn environnement_ordinaire_inchange() {
+        let vars: Vec<(OsString, OsString)> = [
+            ("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            ("LD_LIBRARY_PATH", "/opt/perso/lib"),
+            ("PYTHONPATH", "/home/u/py"),
+            // Préfixe commun sans être dans le dossier : conservé.
+            (
+                "XDG_DATA_DIRS",
+                "/tmp/.mount_BoiteXy12-autre/share:/usr/share",
+            ),
+        ]
+        .map(|(k, v)| (k.into(), v.into()))
+        .to_vec();
+        assert_eq!(env_fixes(vars, Path::new("/tmp/.mount_BoiteXy12")), vec![]);
+    }
+
+    /// Le spawn réel applique les corrections : vérifié avec `env`.
+    #[cfg(unix)]
+    #[test]
+    fn corrections_appliquees_au_processus_fils() {
+        let appdir = Path::new("/tmp/.mount_BoiteXy12");
+        let vars = appimage_env(appdir, None);
+        let mut cmd = Command::new("/usr/bin/env");
+        cmd.env_clear().envs(vars.iter().cloned());
+        apply_env_fixes(&mut cmd, &env_fixes(vars, appdir));
+        let out = String::from_utf8(cmd.output().unwrap().stdout).unwrap();
+        assert!(!out.contains(".mount_BoiteXy12"), "{out}");
+        assert!(out.contains("GTK_THEME=Adwaita:light"), "{out}");
+    }
+
+    /// Vrais Tesseract / yt-dlp lancés sous environnement AppImage simulé :
+    /// cassés avant correction, fonctionnels après. `BOITE_APPIMAGE_EXTRAITE`
+    /// (dossier `squashfs-root` d'une vraie AppImage) reproduit en plus la
+    /// panne de Tesseract sur le libnghttp2 embarqué et vérifie le 7-Zip bundlé.
+    #[cfg(unix)]
+    #[test]
+    fn tesseract_et_ytdlp_sous_appimage() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real_appdir = std::env::var_os("BOITE_APPIMAGE_EXTRAITE").map(PathBuf::from);
+        let appdir = real_appdir.clone().unwrap_or_else(|| {
+            fs::create_dir_all(tmp.path().join("usr/lib")).unwrap();
+            tmp.path().to_path_buf()
+        });
+        let vars = appimage_env(&appdir, None);
+        let launch = |program: &Path, args: &[&str], fix: bool| {
+            let mut cmd = Command::new(program);
+            cmd.args(args).env_clear().envs(vars.iter().cloned());
+            if fix {
+                apply_env_fixes(&mut cmd, &env_fixes(vars.clone(), &appdir));
+            }
+            let out = cmd.output().unwrap();
+            let text = String::from_utf8_lossy(&out.stdout).into_owned()
+                + &String::from_utf8_lossy(&out.stderr);
+            (out.status.success(), text)
+        };
+        let mut checked = vec![];
+        // Binaires du PATH (cas v0.1.0) puis téléchargés au premier usage.
+        let system = Resolver::new(None, None, std::env::var_os("PATH"));
+        let downloaded = Resolver::new(None, Some(crate::tools::testutil::scratch_bin_dir()), None);
+        for (r, origin) in [(system, "PATH"), (downloaded, "téléchargé")] {
+            if let Some(p) = r.resolve(Binary::YtDlp).map(|r| r.path) {
+                // Script Python (paquet du système) : cassé par `PYTHONHOME`.
+                let script = fs::read(&p).unwrap_or_default();
+                let shebang = script.split(|b| *b == b'\n').next().unwrap_or_default();
+                if shebang.starts_with(b"#!") && String::from_utf8_lossy(shebang).contains("python")
+                {
+                    let (ok, text) = launch(&p, &["--version"], false);
+                    assert!(!ok && text.contains("Python path configuration"), "{text}");
+                }
+                let (ok, text) = launch(&p, &["--version"], true);
+                assert!(ok && parse_version(&text, "").is_some(), "{text}");
+                checked.push(format!("yt-dlp ({origin})"));
+            }
+            if let Some(p) = r.resolve(Binary::Tesseract).map(|r| r.path) {
+                if real_appdir.is_some() {
+                    let (ok, text) = launch(&p, &["--version"], false);
+                    assert!(!ok && text.contains("symbol lookup error"), "{text}");
+                }
+                let (ok, text) = launch(&p, &["--version"], true);
+                assert!(ok && text.starts_with("tesseract "), "{text}");
+                checked.push(format!("tesseract ({origin})"));
+            }
+        }
+        let bundled = appdir.join("usr/bin/7zz");
+        if bundled.exists() {
+            let (_, text) = launch(&bundled, &[], true);
+            assert!(text.contains("7-Zip"), "{text}");
+            checked.push("7zz (bundlé)".into());
+        }
+        eprintln!("vérifiés sous AppImage simulée : {checked:?}");
+    }
+
+    /// Diagnostic des vrais Tesseract / yt-dlp du PATH : « Présent ». Lancé
+    /// dans l'environnement d'une AppImage (`APPDIR`, `APPIMAGE`,
+    /// `LD_LIBRARY_PATH`…), ce test couvre aussi la détection automatique.
+    #[test]
+    fn diagnostic_reel_tesseract_ytdlp() {
+        let r = Resolver::new(None, None, std::env::var_os("PATH"));
+        for b in [Binary::Tesseract, Binary::YtDlp] {
+            if r.resolve(b).is_none() {
+                eprintln!("{} absent — test réel ignoré", b.label());
+                continue;
+            }
+            let s = status(&r, b);
+            assert_eq!(s.state, State::Present, "{s:?}");
+        }
     }
 
     #[cfg(unix)]
