@@ -115,7 +115,10 @@ function choisirOutil(outil) {
   statut.textContent = raison ?? "Disponible";
   statut.className = "statut " + (raison ? "indisponible" : "disponible");
   statut.after(...aidesBinairesManquants(outil));
-  $(".choisir", panneau).addEventListener("click", choisirFichiers);
+  $(".choisir", panneau).addEventListener("click", () => choisirFichiers(false));
+  const choisirDossier = $(".choisir-dossier", panneau);
+  choisirDossier.hidden = !outil.input.directories;
+  choisirDossier.addEventListener("click", () => choisirFichiers(true));
   $(".lancer", panneau).addEventListener("click", lancer);
   $(".annuler", panneau).addEventListener("click", annuler);
   construireOptions($(".options", panneau), outil.options);
@@ -211,8 +214,11 @@ function ajouterFichiers(chemins) {
   afficherFichiers();
 }
 
-async function choisirFichiers() {
-  const options = { multiple: !!etat.outil?.input.multiple, directory: false };
+// Le sélecteur natif choisit soit des fichiers, soit des dossiers : les outils
+// qui acceptent les deux (`input.directories`, ex. Créer un ZIP) ont un second
+// bouton « Choisir un dossier… ».
+async function choisirFichiers(dossier) {
+  const options = { multiple: !!etat.outil?.input.multiple, directory: dossier && !!etat.outil?.input.directories };
   const res = tauri.dialog ? await tauri.dialog.open(options) : await invoke("plugin:dialog|open", { options });
   if (res) ajouterFichiers(Array.isArray(res) ? res : [res]);
 }
