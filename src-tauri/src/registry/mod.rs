@@ -315,4 +315,32 @@ mod tests {
         assert!(json.contains("\"pdf-fusionner\""));
         assert!(json.contains("\"status\":\"phase1\""));
     }
+
+    /// Le frontend cherche chaque `tools[].binaries[]` du catalogue parmi les
+    /// `id` du Diagnostic : les deux JSON doivent employer les mêmes clés
+    /// (v0.1.0 : `seven-zip` / `image-magick` introuvables, 7 outils grisés).
+    #[test]
+    fn binaires_du_catalogue_connus_du_diagnostic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vide = crate::sidecar::Resolver::new(None, Some(tmp.path().into()), None);
+        let diag = serde_json::to_value(crate::sidecar::check_all(&vide)).unwrap();
+        let ids: HashSet<&str> = diag
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["id"].as_str().unwrap())
+            .collect();
+        let cat = serde_json::to_value(catalog()).unwrap();
+        let mut utilises = HashSet::new();
+        for t in cat["tools"].as_array().unwrap() {
+            for b in t["binaries"].as_array().unwrap() {
+                let b = b.as_str().unwrap();
+                assert!(ids.contains(b), "{} : binaire {b} inconnu", t["id"]);
+                utilises.insert(b);
+            }
+        }
+        for b in ["7zip", "imagemagick", "realesrgan"] {
+            assert!(utilises.contains(b), "{b} n'est plus utilisé ?");
+        }
+    }
 }

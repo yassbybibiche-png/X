@@ -13,13 +13,12 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 use crate::cancel::{CancelToken, Cancelled};
 
 /// Binaires tiers connus de l'application.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Binary {
     Ghostscript,
     Tesseract,
@@ -32,6 +31,15 @@ pub enum Binary {
     Whisper,
     RealEsrgan,
     Qpdf,
+}
+
+/// Sérialisé par [`Binary::id`] : `ToolDef.binaries` doit employer les mêmes
+/// clés que `BinaryStatus.id` (Diagnostic), sinon le frontend croit le binaire
+/// absent (v0.1.0 : `seven-zip` ≠ `7zip`, 7 outils grisés à tort).
+impl Serialize for Binary {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.id())
+    }
 }
 
 /// Mode d'obtention d'un binaire (voir PLAN.md §3.3).
@@ -779,6 +787,13 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), Binary::ALL.len());
         assert!(Binary::ALL.iter().all(|b| !b.candidates().is_empty()));
+    }
+
+    #[test]
+    fn serialise_par_son_id() {
+        for b in Binary::ALL {
+            assert_eq!(serde_json::to_value(b).unwrap(), b.id());
+        }
     }
 
     #[test]
