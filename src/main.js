@@ -1,6 +1,8 @@
 // Boîte à outils — interface (vanilla JS, aucune dépendance).
 // Toutes les données affichées passent par textContent (jamais innerHTML).
 
+import { creerSuivi, FINALES } from "./taches.js";
+
 const tauri = window.__TAURI__;
 const invoke = tauri.core.invoke;
 const listen = tauri.event.listen;
@@ -11,7 +13,7 @@ const etat = {
   categorie: null,
   outil: null,
   fichiers: [],
-  tache: null,
+  suivi: creerSuivi(),
   recherche: "",
   telechargements: new Map(), // jobId -> { binaire, termine, total, message }
 };
@@ -101,7 +103,7 @@ function afficherOutils() {
 function choisirOutil(outil) {
   etat.outil = outil;
   etat.fichiers = [];
-  etat.tache = null;
+  etat.suivi.terminer();
   afficherOutils();
   const panneau = $("#panneau");
   panneau.replaceChildren($("#tpl-panneau").content.cloneNode(true));
@@ -240,11 +242,12 @@ function enCours(actif) {
 }
 
 async function annuler() {
-  if (etat.tache === null) return;
+  const jobId = etat.suivi.tache;
+  if (jobId === null) return;
   $("#panneau .annuler").disabled = true;
   journal("Annulation demandée…");
   try {
-    await invoke("cancel_job", { jobId: etat.tache });
+    await invoke("cancel_job", { jobId });
   } catch (e) {
     journal(String(e), "error");
   }
@@ -266,17 +269,27 @@ async function lancer() {
   bloc.hidden = true;
   $("ul", bloc).replaceChildren();
   journal(`Lancement de « ${outil.name} » sur ${etat.fichiers.length} fichier(s)…`);
+  const ticket = etat.suivi.demarrer();
   try {
-    etat.tache = await invoke("run_tool", { toolId: outil.id, inputs: etat.fichiers, options: lireOptions() });
+    const jobId = await invoke("run_tool", { toolId: outil.id, inputs: etat.fichiers, options: lireOptions() });
+    const recus = etat.suivi.associer(ticket, jobId);
+    if (recus === null) return; // outil changé entre-temps
     enCours(true);
+    // Tâche rapide : ses événements (fin comprise) sont arrivés avant l'identifiant.
+    recus.forEach(appliquerEvenement);
   } catch (e) {
+    etat.suivi.terminer();
     journal(String(e), "error");
+    enCours(false);
     afficherFichiers();
   }
 }
 
 function surEvenement({ payload: ev }) {
-  if (ev.jobId !== etat.tache) return;
+  if (etat.suivi.recevoir(ev)) appliquerEvenement(ev);
+}
+
+function appliquerEvenement(ev) {
   if (ev.percent !== null) progression(ev.percent);
   if (ev.kind === "progress" || ev.kind === "log") journal(ev.message);
   else if (ev.kind === "warning") {
@@ -288,8 +301,8 @@ function surEvenement({ payload: ev }) {
     journal(ev.message, "done");
     for (const o of ev.outputs) journal("→ " + o, "done");
   }
-  if (ev.kind === "done" || ev.kind === "error" || ev.kind === "cancelled") {
-    etat.tache = null;
+  if (FINALES.has(ev.kind)) {
+    etat.suivi.terminer();
     enCours(false);
     afficherFichiers();
   }

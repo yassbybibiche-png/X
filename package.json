@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "description": "Boîte à outils — app de bureau de conversion de fichiers, 100 % locale",
   "license": "MIT",
+  "type": "module",
   "scripts": {
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "node --test tests/frontend/*.test.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
