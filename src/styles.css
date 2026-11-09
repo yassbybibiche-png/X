@@ -25,6 +25,9 @@
 }
 
 * { box-sizing: border-box; }
+/* `.layout { display: grid }` l'emportait sur [hidden] : la vue Outils restait
+   affichée au-dessus du Diagnostic et captait la molette (v0.1.0). */
+.layout[hidden] { display: none; }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.5; }
@@ -84,10 +87,16 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .journal .error, .error { color: var(--erreur); }
 .journal .done { color: var(--ok); }
 
-.diagnostic { flex: 1; overflow: auto; padding: 1rem 1.5rem; }
+.diagnostic { flex: 1; min-height: 0; overflow: auto; padding: 1rem 1.5rem; }
 .diagnostic .aide { color: var(--doux); }
 .diagnostic table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--carte); }
-.diagnostic th, .diagnostic td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--bord); font-size: 0.88rem; word-break: break-all; }
+.diagnostic th, .diagnostic td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--bord); font-size: 0.88rem; overflow-wrap: break-word; }
+/* Seul le chemin peut être coupé n'importe où ; Version, Origine et Mode
+   gardent une largeur lisible (v0.1.0 : texte lettre par lettre à 1280 px). */
+.diagnostic td:nth-child(5) { word-break: break-all; }
+.diagnostic th:nth-child(3) { min-width: 6rem; }
+.diagnostic th:nth-child(4) { min-width: 8rem; }
+.diagnostic th:nth-child(7) { min-width: 11rem; }
 .diagnostic tr.present td:nth-child(2) { color: var(--ok); font-weight: 600; }
 .diagnostic tr.absent td:nth-child(2), .diagnostic tr.casse td:nth-child(2) { color: var(--erreur); font-weight: 600; }
 .diagnostic .erreur-binaire { margin: 0.2rem 0 0; color: var(--erreur); font-size: 0.8rem; }
